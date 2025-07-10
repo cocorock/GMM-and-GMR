@@ -236,23 +236,44 @@ class GaitDataSimulator:
     def get_current_joint_data(self):
         """Get current joint angles and velocities"""
         if self.current_trial_data is None:
+            print("✗ Error: No trial data loaded")
             return None
         
         if self.current_step >= len(self.current_trial_data['hip_pos']):
             print("End of trial reached")
             return None
         
-        data = {
-            'hip_angle': self.current_trial_data['hip_pos'][self.current_step],
-            'knee_angle': self.current_trial_data['knee_pos'][self.current_step],
-            'hip_velocity': self.current_trial_data['hip_vel'][self.current_step],
-            'knee_velocity': self.current_trial_data['knee_vel'][self.current_step],
-            'time': self.current_trial_data['time'][self.current_step],
-            'step': self.current_step,
-            'trial': self.current_trial
-        }
-        
-        return data
+        try:
+            # Extract data with validation
+            hip_angle = self.current_trial_data['hip_pos'][self.current_step]
+            knee_angle = self.current_trial_data['knee_pos'][self.current_step]
+            hip_velocity = self.current_trial_data['hip_vel'][self.current_step]
+            knee_velocity = self.current_trial_data['knee_vel'][self.current_step]
+            time_val = self.current_trial_data['time'][self.current_step]
+            
+            # Validate data
+            if np.isnan(hip_angle) or np.isnan(knee_angle) or np.isnan(hip_velocity) or np.isnan(knee_velocity):
+                print(f"✗ Warning: NaN values detected at step {self.current_step}")
+                print(f"   hip_angle: {hip_angle}, knee_angle: {knee_angle}")
+                print(f"   hip_velocity: {hip_velocity}, knee_velocity: {knee_velocity}")
+                return None
+            
+            data = {
+                'hip_angle': float(hip_angle),
+                'knee_angle': float(knee_angle),
+                'hip_velocity': float(hip_velocity),
+                'knee_velocity': float(knee_velocity),
+                'time': float(time_val),
+                'step': self.current_step,
+                'trial': self.current_trial
+            }
+            
+            return data
+            
+        except Exception as e:
+            print(f"✗ Error getting joint data at step {self.current_step}: {e}")
+            print(f"   Data lengths: hip_pos={len(self.current_trial_data['hip_pos'])}")
+            return None
     
     def next_step(self):
         """Advance to next step in current trial"""
@@ -328,36 +349,70 @@ class TPGMMGaitPredictor:
         Returns:
             Dictionary with ankle position, velocity, and orientation
         """
-        # Calculate ankle position using forward kinematics
-        ankle_pos = self.fk.calculate_ankle_position(
-            joint_data['hip_angle'], 
-            joint_data['knee_angle'], 
-            pelvis_orientation
-        )
-        
-        # Calculate ankle velocity using forward kinematics
-        ankle_vel = self.fk.calculate_ankle_velocity(
-            joint_data['hip_angle'], 
-            joint_data['knee_angle'],
-            joint_data['hip_velocity'], 
-            joint_data['knee_velocity'],
-            pelvis_orientation, 
-            pelvis_velocity
-        )
-        
-        # Calculate ankle orientation using your specified formula
-        ankle_orientation = self.fk.calculate_ankle_orientation(
-            joint_data['hip_angle'], 
-            joint_data['knee_angle'], 
-            pelvis_orientation
-        )
-        
-        return {
-            'position': ankle_pos,
-            'velocity': ankle_vel,
-            'orientation': ankle_orientation,
-            'time': joint_data['time']
-        }
+        try:
+            # Validate input data
+            if joint_data is None:
+                print("✗ Error: joint_data is None")
+                return None
+            
+            required_keys = ['hip_angle', 'knee_angle', 'hip_velocity', 'knee_velocity', 'time']
+            for key in required_keys:
+                if key not in joint_data:
+                    print(f"✗ Error: Missing key '{key}' in joint_data")
+                    return None
+                if joint_data[key] is None or np.isnan(joint_data[key]):
+                    print(f"✗ Error: Invalid value for '{key}': {joint_data[key]}")
+                    return None
+            
+            # Calculate ankle position using forward kinematics
+            ankle_pos = self.fk.calculate_ankle_position(
+                joint_data['hip_angle'], 
+                joint_data['knee_angle'], 
+                pelvis_orientation
+            )
+            
+            # Calculate ankle velocity using forward kinematics
+            ankle_vel = self.fk.calculate_ankle_velocity(
+                joint_data['hip_angle'], 
+                joint_data['knee_angle'],
+                joint_data['hip_velocity'], 
+                joint_data['knee_velocity'],
+                pelvis_orientation, 
+                pelvis_velocity
+            )
+            
+            # Calculate ankle orientation using your specified formula
+            ankle_orientation = self.fk.calculate_ankle_orientation(
+                joint_data['hip_angle'], 
+                joint_data['knee_angle'], 
+                pelvis_orientation
+            )
+            
+            # Validate outputs
+            if ankle_pos is None or ankle_vel is None or ankle_orientation is None:
+                print("✗ Error: Forward kinematics returned None values")
+                return None
+            
+            if np.any(np.isnan(ankle_pos)) or np.any(np.isnan(ankle_vel)) or np.isnan(ankle_orientation):
+                print("✗ Error: Forward kinematics returned NaN values")
+                print(f"   ankle_pos: {ankle_pos}")
+                print(f"   ankle_vel: {ankle_vel}")
+                print(f"   ankle_orientation: {ankle_orientation}")
+                return None
+            
+            return {
+                'position': ankle_pos,
+                'velocity': ankle_vel,
+                'orientation': ankle_orientation,
+                'time': joint_data['time']
+            }
+            
+        except Exception as e:
+            print(f"✗ Error in process_joint_data: {e}")
+            print(f"   joint_data: {joint_data}")
+            import traceback
+            traceback.print_exc()
+            return None
     
     def create_tpgmm_input(self, ankle_data):
         """
@@ -594,8 +649,29 @@ def run_gait_simulation():
             # Process joint data to ankle data
             ankle_data = predictor.process_joint_data(joint_data)
             
+            # Check if ankle_data is valid
+            if ankle_data is None:
+                print(f"✗ Failed to process joint data at step {step_count}")
+                print(f"   Joint data: {joint_data}")
+                
+                # Wait for user input to continue or quit
+                user_input = wait_for_user_input()
+                if user_input == 'quit':
+                    break
+                elif user_input == 'next_trial':
+                    if simulator.next_trial():
+                        step_count = 0
+                        continue
+                    else:
+                        print("No more trials. Exiting.")
+                        break
+                else:
+                    simulator.next_step()
+                    step_count += 1
+                    continue
+            
             # Display current state
-            print(f"\\n--- Step {step_count} (Trial {joint_data['trial']}, Point {joint_data['step']}) ---")
+            print(f"\n--- Step {step_count} (Trial {joint_data['trial']}, Point {joint_data['step']}) ---")
             print(f"Joint angles: Hip={joint_data['hip_angle']:.3f}, Knee={joint_data['knee_angle']:.3f}")
             print(f"Ankle position: [{ankle_data['position'][0]:.3f}, {ankle_data['position'][1]:.3f}]")
             print(f"Ankle velocity: [{ankle_data['velocity'][0]:.3f}, {ankle_data['velocity'][1]:.3f}]")
