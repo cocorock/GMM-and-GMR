@@ -259,10 +259,10 @@ class GaitDataSimulator:
                 return None
             
             data = {
-                'hip_angle': float(hip_angle),
-                'knee_angle': float(knee_angle),
-                'hip_velocity': float(hip_velocity),
-                'knee_velocity': float(knee_velocity),
+                'hip_angle': np.deg2rad(float(hip_angle)),      # Convert degrees to radians
+                'knee_angle': np.deg2rad(float(knee_angle)),    # Convert degrees to radians
+                'hip_velocity': np.deg2rad(float(hip_velocity)), # Convert degrees/s to radians/s
+                'knee_velocity': np.deg2rad(float(knee_velocity)), # Convert degrees/s to radians/s
                 'time': float(time_val),
                 'step': self.current_step,
                 'trial': self.current_trial
@@ -672,10 +672,11 @@ def run_gait_simulation():
             
             # Display current state
             print(f"\n--- Step {step_count} (Trial {joint_data['trial']}, Point {joint_data['step']}) ---")
-            print(f"Joint angles: Hip={joint_data['hip_angle']:.3f}, Knee={joint_data['knee_angle']:.3f}")
+            print(f"Joint angles (deg): Hip={np.rad2deg(joint_data['hip_angle']):.1f}°, Knee={np.rad2deg(joint_data['knee_angle']):.1f}°")
+            print(f"Joint angles (rad): Hip={joint_data['hip_angle']:.3f}, Knee={joint_data['knee_angle']:.3f}")
             print(f"Ankle position: [{ankle_data['position'][0]:.3f}, {ankle_data['position'][1]:.3f}]")
             print(f"Ankle velocity: [{ankle_data['velocity'][0]:.3f}, {ankle_data['velocity'][1]:.3f}]")
-            print(f"Ankle orientation: {ankle_data['orientation']:.3f}")
+            print(f"Ankle orientation: {ankle_data['orientation']:.3f} rad ({np.rad2deg(ankle_data['orientation']):.1f}°)")
             
             # Predict next state
             predicted_state = predictor.predict_next_state(ankle_data)
