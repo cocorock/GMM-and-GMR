@@ -7,7 +7,6 @@ import joblib
 import matplotlib.pyplot as plt
 from collections import deque
 import threading
-import select
 
 class ForwardKinematics:
     """
@@ -193,13 +192,33 @@ class GaitDataSimulator:
         try:
             trial_data = self.gait_data[0, trial_index][0, 0]
             
-            # Extract joint data
+            # Extract joint data - handle different possible structures
+            if hasattr(trial_data, 'dtype') and trial_data.dtype.names:
+                # Structured array
+                hip_pos = trial_data['hip_pos'][0] if trial_data['hip_pos'].ndim > 1 else trial_data['hip_pos']
+                knee_pos = trial_data['knee_pos'][0] if trial_data['knee_pos'].ndim > 1 else trial_data['knee_pos']
+                hip_vel = trial_data['hip_vel'][0] if trial_data['hip_vel'].ndim > 1 else trial_data['hip_vel']
+                knee_vel = trial_data['knee_vel'][0] if trial_data['knee_vel'].ndim > 1 else trial_data['knee_vel']
+                
+                # Check if time exists
+                if 'time' in trial_data.dtype.names:
+                    time_data = trial_data['time'][0] if trial_data['time'].ndim > 1 else trial_data['time']
+                else:
+                    time_data = np.arange(len(hip_pos.flatten()))
+            else:
+                # Try direct attribute access
+                hip_pos = trial_data.hip_pos
+                knee_pos = trial_data.knee_pos
+                hip_vel = trial_data.hip_vel
+                knee_vel = trial_data.knee_vel
+                time_data = getattr(trial_data, 'time', np.arange(len(hip_pos.flatten())))
+            
             self.current_trial_data = {
-                'hip_pos': trial_data['hip_pos'].flatten(),
-                'knee_pos': trial_data['knee_pos'].flatten(),
-                'hip_vel': trial_data['hip_vel'].flatten(),
-                'knee_vel': trial_data['knee_vel'].flatten(),
-                'time': trial_data.get('time', np.arange(len(trial_data['hip_pos'].flatten()))).flatten()
+                'hip_pos': hip_pos.flatten(),
+                'knee_pos': knee_pos.flatten(),
+                'hip_vel': hip_vel.flatten(),
+                'knee_vel': knee_vel.flatten(),
+                'time': time_data.flatten()
             }
             
             self.current_trial = trial_index
@@ -210,6 +229,8 @@ class GaitDataSimulator:
             
         except Exception as e:
             print(f"✗ Error loading trial {trial_index}: {e}")
+            print(f"   Trial data type: {type(trial_data)}")
+            print(f"   Trial data structure: {trial_data}")
             return False
     
     def get_current_joint_data(self):
@@ -492,19 +513,41 @@ class TPGMMGaitPredictor:
         return predicted_output
 
 def wait_for_user_input():
-    """Wait for user input (space, n, or q)"""
-    print("\\nPress SPACE for next step, 'n' for next trial, 'q' to quit: ", end='', flush=True)
+    """Wait for user input (space, n, or q) - Windows compatible"""
+    print("\nPress SPACE for next step, 'n' for next trial, 'q' to quit: ", end='', flush=True)
     
-    while True:
-        if sys.stdin in select.select([sys.stdin], [], [], 0)[0]:
-            user_input = sys.stdin.readline().strip().lower()
-            if user_input == '' or user_input == ' ':  # Space or Enter
-                return 'space'
-            elif user_input == 'n':
-                return 'next_trial'
-            elif user_input == 'q':
-                return 'quit'
-        time.sleep(0.1)
+    try:
+        # Windows compatible input method
+        import msvcrt
+        
+        while True:
+            if msvcrt.kbhit():
+                key = msvcrt.getch().decode('utf-8').lower()
+                print(key)  # Echo the key pressed
+                
+                if key == ' ':  # Space
+                    return 'space'
+                elif key == 'n':
+                    return 'next_trial'
+                elif key == 'q':
+                    return 'quit'
+                elif key == '\r':  # Enter key
+                    return 'space'
+            time.sleep(0.1)
+            
+    except ImportError:
+        # Fallback for non-Windows systems
+        print("\n(Press Enter after typing your choice)")
+        user_input = input().strip().lower()
+        
+        if user_input == '' or user_input == ' ':  # Space or Enter
+            return 'space'
+        elif user_input == 'n':
+            return 'next_trial'
+        elif user_input == 'q':
+            return 'quit'
+        else:
+            return 'space'  # Default action
 
 def run_gait_simulation():
     """Main simulation loop"""
@@ -594,7 +637,7 @@ def main():
     print("This program simulates real-time gait analysis using TP-GMM")
     print("Make sure you have:")
     print("  1. Trained TP-GMM model (tpgmm_gait_model.pkl)")
-    print("  2. Gait data file (your_gait_data.mat)")
+    print("  2. Gait data file (demo_gait_data_angular_10_samples.mat)")
     print()
     
     run_gait_simulation()
