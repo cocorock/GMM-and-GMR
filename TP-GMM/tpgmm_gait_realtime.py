@@ -39,13 +39,18 @@ class ForwardKinematics:
         Returns:
             ankle_position: [x, y] ankle position relative to hip
         """
+        # For vertical downward leg when hip_angle=0, knee_angle=0:
+        # Adjust angles so that 0,0 means straight down
+        # Hip angle: 0 = straight down, positive = forward
+        adjusted_hip_angle = hip_angle - np.pi/2  # -90 degrees to make 0 = downward
+        
         # Calculate knee position relative to hip
-        knee_x = self.l1 * np.cos(hip_angle)
-        knee_y = self.l1 * np.sin(hip_angle)
+        knee_x = self.l1 * np.cos(adjusted_hip_angle)
+        knee_y = self.l1 * np.sin(adjusted_hip_angle)
         
         # Calculate ankle position relative to knee
-        # Total angle for second link is hip_angle + knee_angle
-        total_angle = hip_angle + knee_angle
+        # Total angle for second link
+        total_angle = adjusted_hip_angle + knee_angle
         ankle_x = knee_x + self.l2 * np.cos(total_angle)
         ankle_y = knee_y + self.l2 * np.sin(total_angle)
         
@@ -78,12 +83,15 @@ class ForwardKinematics:
         Returns:
             ankle_velocity: [vx, vy] ankle velocity
         """
+        # Adjust hip angle for vertical downward reference
+        adjusted_hip_angle = hip_angle - np.pi/2
+        
         # Jacobian calculation for 2-link system
-        total_angle = hip_angle + knee_angle
+        total_angle = adjusted_hip_angle + knee_angle
         
         # Partial derivatives of ankle position w.r.t. joint angles
-        dx_dhip = -self.l1 * np.sin(hip_angle) - self.l2 * np.sin(total_angle)
-        dy_dhip = self.l1 * np.cos(hip_angle) + self.l2 * np.cos(total_angle)
+        dx_dhip = -self.l1 * np.sin(adjusted_hip_angle) - self.l2 * np.sin(total_angle)
+        dy_dhip = self.l1 * np.cos(adjusted_hip_angle) + self.l2 * np.cos(total_angle)
         
         dx_dknee = -self.l2 * np.sin(total_angle)
         dy_dknee = self.l2 * np.cos(total_angle)
@@ -112,7 +120,26 @@ class ForwardKinematics:
             ankle_vx = ankle_vx
             ankle_vy = ankle_vy
         
-        return np.array([ankle_vx, ankle_vy])
+    def calculate_ankle_orientation(self, hip_angle, knee_angle, pelvis_orientation=0.0):
+        """
+        Calculate ankle orientation from joint angles
+        Formula: pelvis_orientation + hip_angle - knee_angle + 90°
+        
+        Args:
+            hip_angle: Hip joint angle in radians
+            knee_angle: Knee joint angle in radians
+            pelvis_orientation: Pelvis orientation angle in radians
+            
+        Returns:
+            ankle_orientation: Ankle orientation in radians
+        """
+        # Convert 90° to radians
+        ankle_orientation = pelvis_orientation + hip_angle - knee_angle + np.pi/2
+        
+        # Normalize angle to [-π, π] range
+        ankle_orientation = np.arctan2(np.sin(ankle_orientation), np.cos(ankle_orientation))
+        
+        return ankle_orientation
 
 class GaitDataSimulator:
     """
@@ -145,7 +172,7 @@ class GaitDataSimulator:
         """Load gait data from MAT file"""
         try:
             mat_data = scipy.io.loadmat(self.mat_file_path)
-            self.gait_data = mat_data['processed_gait_data']
+            self.gait_data = mat_data['output_struct_array']
             self.total_trials = self.gait_data.shape[1]
             
             # Load first trial
@@ -297,8 +324,12 @@ class TPGMMGaitPredictor:
             pelvis_velocity
         )
         
-        # Calculate ankle orientation (simplified: total leg angle)
-        ankle_orientation = joint_data['hip_angle'] + joint_data['knee_angle'] + pelvis_orientation
+        # Calculate ankle orientation using your specified formula
+        ankle_orientation = self.fk.calculate_ankle_orientation(
+            joint_data['hip_angle'], 
+            joint_data['knee_angle'], 
+            pelvis_orientation
+        )
         
         return {
             'position': ankle_pos,
