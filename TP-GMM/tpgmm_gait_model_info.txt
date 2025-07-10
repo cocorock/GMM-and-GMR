@@ -1,0 +1,20 @@
+=== TP-GMM Gait Model Information ===
+
+GMM Components: 18
+Total Dimension: 11
+Frames: 2
+Reference Frame: 1
+Target Frame: 2
+
+Data Structure (2D):
+  Position dims: {'frame1': [1, 2], 'frame2': [6, 7]}
+  Velocity dims: {'frame1': [3, 4], 'frame2': [8, 9]}
+  Orientation dims: {'frame1': [5], 'frame2': [10]}
+
+Metrics:
+  log_likelihood: 31.00
+  bic: -88850.16
+  aic: -96395.16
+
+Demonstrations: 8
+Total points: 1600
