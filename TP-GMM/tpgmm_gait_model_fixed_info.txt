@@ -2,7 +2,7 @@
 
 Model Type: Task-Parameterized Gaussian Mixture Model
 Application: Gait trajectory modeling
-Date Created: 2025-07-11T13:24:21
+Date Created: 2025-07-11T18:30:23
 
 === Model Configuration ===
 GMM Components: 11
