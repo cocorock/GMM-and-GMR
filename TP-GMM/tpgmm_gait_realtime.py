@@ -1,301 +1,75 @@
-import sys
-import os
-import time
 import numpy as np
-import scipy.io
 import joblib
+import scipy.io
 import matplotlib.pyplot as plt
+from matplotlib.patches import Circle, Polygon
+import time
 from collections import deque
-import threading
+from sklearn.mixture import GaussianMixture
 
-class ForwardKinematics:
+class GaitForwardKinematics:
     """
-    Forward kinematics calculator for 2D gait analysis
+    Forward kinematics for gait analysis
     """
-    def __init__(self, l1=0.3874, l2=0.4136):
+    def __init__(self, l1=0.4135, l2=0.39):
         """
-        Initialize forward kinematics with link lengths
+        Initialize forward kinematics
         
         Args:
             l1: Length of first link (hip to knee) in meters
             l2: Length of second link (knee to ankle) in meters
         """
-        self.l1 = l1  # Hip to knee
-        self.l2 = l2  # Knee to ankle
-        print(f"✓ Forward Kinematics initialized:")
-        print(f"  L1 (hip-knee): {self.l1:.4f} m")
-        print(f"  L2 (knee-ankle): {self.l2:.4f} m")
-    
-    def calculate_ankle_position(self, hip_angle, knee_angle, pelvis_orientation=0.0):
+        self.l1 = l1
+        self.l2 = l2
+        
+    def calculate_forward_kinematics(self, hip_angle_deg, knee_angle_deg, pelvis_angle_deg=0):
         """
-        Calculate ankle position from joint angles
+        Calculate forward kinematics for 2-link leg with pelvis orientation
         
         Args:
-            hip_angle: Hip joint angle in radians
-            knee_angle: Knee joint angle in radians  
-            pelvis_orientation: Pelvis orientation angle in radians
+            hip_angle_deg: Hip joint angle (degrees)
+            knee_angle_deg: Knee joint angle (degrees) 
+            pelvis_angle_deg: Pelvis orientation angle (degrees)
             
         Returns:
-            ankle_position: [x, y] ankle position relative to hip
+            dict: positions and orientations
+                - hip_pos: Hip position (origin at 0,0)
+                - knee_pos: Knee position
+                - ankle_pos: Ankle position
+                - foot_orientation: Foot orientation angle (degrees)
         """
-        # For vertical downward leg when hip_angle=0, knee_angle=0:
-        # Adjust angles so that 0,0 means straight down
-        # Hip angle: 0 = straight down, positive = forward
-        adjusted_hip_angle = hip_angle - np.pi/2  # -90 degrees to make 0 = downward
+        # Convert degrees to radians
+        hip_angle = np.radians(hip_angle_deg)
+        knee_angle = np.radians(knee_angle_deg)
+        pelvis_angle = np.radians(pelvis_angle_deg)
         
-        # Calculate knee position relative to hip
-        knee_x = self.l1 * np.cos(adjusted_hip_angle)
-        knee_y = self.l1 * np.sin(adjusted_hip_angle)
+        # Hip is at origin (considering pelvis orientation)
+        hip_pos = np.array([0, 0])
         
-        # Calculate ankle position relative to knee
-        # Total angle for second link
-        total_angle = adjusted_hip_angle + knee_angle
-        ankle_x = knee_x + self.l2 * np.cos(total_angle)
-        ankle_y = knee_y + self.l2 * np.sin(total_angle)
+        # Knee position (hip angle relative to pelvis)
+        knee_x = self.l1 * np.cos(hip_angle + pelvis_angle)
+        knee_y = self.l1 * np.sin(hip_angle + pelvis_angle)
+        knee_pos = np.array([knee_x, knee_y])
         
-        # Apply pelvis orientation if needed
-        if pelvis_orientation != 0.0:
-            cos_pelvis = np.cos(pelvis_orientation)
-            sin_pelvis = np.sin(pelvis_orientation)
-            
-            # Rotate ankle position by pelvis orientation
-            ankle_x_rot = ankle_x * cos_pelvis - ankle_y * sin_pelvis
-            ankle_y_rot = ankle_x * sin_pelvis + ankle_y * cos_pelvis
-            
-            ankle_x, ankle_y = ankle_x_rot, ankle_y_rot
+        # Ankle position (knee angle is relative to femur)
+        ankle_x = knee_x + self.l2 * np.cos(hip_angle + knee_angle + pelvis_angle)
+        ankle_y = knee_y + self.l2 * np.sin(hip_angle + knee_angle + pelvis_angle)
+        ankle_pos = np.array([ankle_x, ankle_y])
         
-        return np.array([ankle_x, ankle_y])
-    
-    def calculate_ankle_velocity(self, hip_angle, knee_angle, hip_velocity, knee_velocity, 
-                               pelvis_orientation=0.0, pelvis_velocity=0.0):
-        """
-        Calculate ankle velocity from joint angles and velocities
+        # Foot orientation (+90 degrees from tibia direction)
+        tibia_angle = hip_angle + knee_angle + pelvis_angle
+        foot_orientation_deg = np.degrees(tibia_angle) + 90
         
-        Args:
-            hip_angle: Hip joint angle in radians
-            knee_angle: Knee joint angle in radians
-            hip_velocity: Hip joint velocity in rad/s
-            knee_velocity: Knee joint velocity in rad/s
-            pelvis_orientation: Pelvis orientation angle in radians
-            pelvis_velocity: Pelvis velocity in rad/s
-            
-        Returns:
-            ankle_velocity: [vx, vy] ankle velocity
-        """
-        # Adjust hip angle for vertical downward reference
-        adjusted_hip_angle = hip_angle - np.pi/2
-        
-        # Jacobian calculation for 2-link system
-        total_angle = adjusted_hip_angle + knee_angle
-        
-        # Partial derivatives of ankle position w.r.t. joint angles
-        dx_dhip = -self.l1 * np.sin(adjusted_hip_angle) - self.l2 * np.sin(total_angle)
-        dy_dhip = self.l1 * np.cos(adjusted_hip_angle) + self.l2 * np.cos(total_angle)
-        
-        dx_dknee = -self.l2 * np.sin(total_angle)
-        dy_dknee = self.l2 * np.cos(total_angle)
-        
-        # Calculate velocities
-        ankle_vx = dx_dhip * hip_velocity + dx_dknee * knee_velocity
-        ankle_vy = dy_dhip * hip_velocity + dy_dknee * knee_velocity
-        
-        # Apply pelvis rotation effect if needed
-        if pelvis_orientation != 0.0 or pelvis_velocity != 0.0:
-            cos_pelvis = np.cos(pelvis_orientation)
-            sin_pelvis = np.sin(pelvis_orientation)
-            
-            # Rotate velocity by pelvis orientation
-            ankle_vx_rot = ankle_vx * cos_pelvis - ankle_vy * sin_pelvis
-            ankle_vy_rot = ankle_vx * sin_pelvis + ankle_vy * cos_pelvis
-            
-            # Add effect of pelvis rotation on position
-            ankle_pos = self.calculate_ankle_position(hip_angle, knee_angle, pelvis_orientation)
-            pelvis_effect_vx = -ankle_pos[1] * pelvis_velocity
-            pelvis_effect_vy = ankle_pos[0] * pelvis_velocity
-            
-            ankle_vx = ankle_vx_rot + pelvis_effect_vx
-            ankle_vy = ankle_vy_rot + pelvis_effect_vy
-        else:
-            ankle_vx = ankle_vx
-            ankle_vy = ankle_vy
-        
-    def calculate_ankle_orientation(self, hip_angle, knee_angle, pelvis_orientation=0.0):
-        """
-        Calculate ankle orientation from joint angles
-        Formula: pelvis_orientation + hip_angle - knee_angle + 90°
-        
-        Args:
-            hip_angle: Hip joint angle in radians
-            knee_angle: Knee joint angle in radians
-            pelvis_orientation: Pelvis orientation angle in radians
-            
-        Returns:
-            ankle_orientation: Ankle orientation in radians
-        """
-        # Convert 90° to radians
-        ankle_orientation = pelvis_orientation + hip_angle - knee_angle + np.pi/2
-        
-        # Normalize angle to [-π, π] range
-        ankle_orientation = np.arctan2(np.sin(ankle_orientation), np.cos(ankle_orientation))
-        
-        return ankle_orientation
-
-class GaitDataSimulator:
-    """
-    Simulates real-time gait data reception from MAT file
-    """
-    def __init__(self, mat_file_path):
-        """
-        Initialize gait data simulator
-        
-        Args:
-            mat_file_path: Path to MAT file with gait data
-        """
-        self.mat_file_path = mat_file_path
-        self.gait_data = None
-        self.current_trial = 0
-        self.current_step = 0
-        self.total_trials = 0
-        self.current_trial_data = None
-        
-        # Load gait data
-        self._load_gait_data()
-        
-        print(f"✓ Gait Data Simulator initialized:")
-        print(f"  Total trials: {self.total_trials}")
-        print(f"  Press SPACE to get next data point")
-        print(f"  Press 'n' to go to next trial")
-        print(f"  Press 'q' to quit")
-    
-    def _load_gait_data(self):
-        """Load gait data from MAT file"""
-        try:
-            mat_data = scipy.io.loadmat(self.mat_file_path)
-            self.gait_data = mat_data['output_struct_array']
-            self.total_trials = self.gait_data.shape[1]
-            
-            # Load first trial
-            self._load_trial(0)
-            
-            print(f"✓ Loaded gait data from: {self.mat_file_path}")
-            
-        except Exception as e:
-            print(f"✗ Error loading gait data: {e}")
-            raise
-    
-    def _load_trial(self, trial_index):
-        """Load specific trial data"""
-        if trial_index >= self.total_trials:
-            print(f"Trial {trial_index} not available. Max: {self.total_trials-1}")
-            return False
-        
-        try:
-            trial_data = self.gait_data[0, trial_index][0, 0]
-            
-            # Extract joint data - handle different possible structures
-            if hasattr(trial_data, 'dtype') and trial_data.dtype.names:
-                # Structured array
-                hip_pos = trial_data['hip_pos'][0] if trial_data['hip_pos'].ndim > 1 else trial_data['hip_pos']
-                knee_pos = trial_data['knee_pos'][0] if trial_data['knee_pos'].ndim > 1 else trial_data['knee_pos']
-                hip_vel = trial_data['hip_vel'][0] if trial_data['hip_vel'].ndim > 1 else trial_data['hip_vel']
-                knee_vel = trial_data['knee_vel'][0] if trial_data['knee_vel'].ndim > 1 else trial_data['knee_vel']
-                
-                # Check if time exists
-                if 'time' in trial_data.dtype.names:
-                    time_data = trial_data['time'][0] if trial_data['time'].ndim > 1 else trial_data['time']
-                else:
-                    time_data = np.arange(len(hip_pos.flatten()))
-            else:
-                # Try direct attribute access
-                hip_pos = trial_data.hip_pos
-                knee_pos = trial_data.knee_pos
-                hip_vel = trial_data.hip_vel
-                knee_vel = trial_data.knee_vel
-                time_data = getattr(trial_data, 'time', np.arange(len(hip_pos.flatten())))
-            
-            self.current_trial_data = {
-                'hip_pos': hip_pos.flatten(),
-                'knee_pos': knee_pos.flatten(),
-                'hip_vel': hip_vel.flatten(),
-                'knee_vel': knee_vel.flatten(),
-                'time': time_data.flatten()
-            }
-            
-            self.current_trial = trial_index
-            self.current_step = 0
-            
-            print(f"✓ Loaded trial {trial_index}: {len(self.current_trial_data['hip_pos'])} data points")
-            return True
-            
-        except Exception as e:
-            print(f"✗ Error loading trial {trial_index}: {e}")
-            print(f"   Trial data type: {type(trial_data)}")
-            print(f"   Trial data structure: {trial_data}")
-            return False
-    
-    def get_current_joint_data(self):
-        """Get current joint angles and velocities"""
-        if self.current_trial_data is None:
-            print("✗ Error: No trial data loaded")
-            return None
-        
-        if self.current_step >= len(self.current_trial_data['hip_pos']):
-            print("End of trial reached")
-            return None
-        
-        try:
-            # Extract data with validation
-            hip_angle = self.current_trial_data['hip_pos'][self.current_step]
-            knee_angle = self.current_trial_data['knee_pos'][self.current_step]
-            hip_velocity = self.current_trial_data['hip_vel'][self.current_step]
-            knee_velocity = self.current_trial_data['knee_vel'][self.current_step]
-            time_val = self.current_trial_data['time'][self.current_step]
-            
-            # Validate data
-            if np.isnan(hip_angle) or np.isnan(knee_angle) or np.isnan(hip_velocity) or np.isnan(knee_velocity):
-                print(f"✗ Warning: NaN values detected at step {self.current_step}")
-                print(f"   hip_angle: {hip_angle}, knee_angle: {knee_angle}")
-                print(f"   hip_velocity: {hip_velocity}, knee_velocity: {knee_velocity}")
-                return None
-            
-            data = {
-                'hip_angle': np.deg2rad(float(hip_angle)),      # Convert degrees to radians
-                'knee_angle': np.deg2rad(float(knee_angle)),    # Convert degrees to radians
-                'hip_velocity': np.deg2rad(float(hip_velocity)), # Convert degrees/s to radians/s
-                'knee_velocity': np.deg2rad(float(knee_velocity)), # Convert degrees/s to radians/s
-                'time': float(time_val),
-                'step': self.current_step,
-                'trial': self.current_trial
-            }
-            
-            return data
-            
-        except Exception as e:
-            print(f"✗ Error getting joint data at step {self.current_step}: {e}")
-            print(f"   Data lengths: hip_pos={len(self.current_trial_data['hip_pos'])}")
-            return None
-    
-    def next_step(self):
-        """Advance to next step in current trial"""
-        self.current_step += 1
-        return self.current_step < len(self.current_trial_data['hip_pos'])
-    
-    def next_trial(self):
-        """Advance to next trial"""
-        if self.current_trial + 1 < self.total_trials:
-            return self._load_trial(self.current_trial + 1)
-        else:
-            print("No more trials available")
-            return False
-    
-    def reset_trial(self):
-        """Reset current trial to beginning"""
-        self.current_step = 0
-        print(f"Reset trial {self.current_trial} to beginning")
+        return {
+            'hip_pos': hip_pos,
+            'knee_pos': knee_pos,
+            'ankle_pos': ankle_pos,
+            'foot_orientation': foot_orientation_deg
+        }
 
 class TPGMMGaitPredictor:
     """
-    TP-GMM predictor for gait data
+    TP-GMM Gait Predictor - simplified for real-time gait analysis
     """
     def __init__(self, model_path):
         """
@@ -309,26 +83,31 @@ class TPGMMGaitPredictor:
         self.gmm_model = self.model_data['gmm_model']
         
         # Control parameters
-        self.max_velocity = 0.5  # m/s
         self.smoothing_factor = 0.7
         
         # History for smoothing
-        self.velocity_history = deque(maxlen=5)
-        self.position_history = deque(maxlen=10)
+        self.prediction_history = deque(maxlen=5)
         
-        # Initialize forward kinematics
-        self.fk = ForwardKinematics()
+        # Forward kinematics
+        self.fk = GaitForwardKinematics()
         
-        # Frame simulation (for TP-GMM)
-        self.reference_frame_origin = np.array([0.0, 0.0])  # Reference frame
-        self.target_frame_origin = np.array([0.0, -0.5])    # Target frame (example)
+        # Frame information from model
+        self.data_structure = self.model_data['data_structure']
+        self.frame_info = self.model_data['frame_info']
+        
+        # Diagnostics
+        self.diagnostics = {
+            'likelihoods': [],
+            'predictions': [],
+            'inputs': []
+        }
         
         print(f"✓ TP-GMM Gait Predictor loaded:")
         print(f"  Components: {self.gmm_model.n_components}")
-        print(f"  Model dimension: {self.model_data['data_structure']['total_dim']}")
-    
+        print(f"  Data structure: {self.data_structure}")
+        
     def _load_model(self, model_path):
-        """Load trained TP-GMM model"""
+        """Load TP-GMM model"""
         try:
             model_data = joblib.load(model_path)
             print(f"✓ Model loaded from: {model_path}")
@@ -337,201 +116,195 @@ class TPGMMGaitPredictor:
             print(f"✗ Error loading model: {e}")
             raise
     
-    def process_joint_data(self, joint_data, pelvis_orientation=0.0, pelvis_velocity=0.0):
+    def preprocess_joint_angles(self, hip_angle_raw, knee_angle_raw):
         """
-        Process joint data to get ankle position and velocity
+        Preprocess joint angles (same as gait_kinematics.py)
         
         Args:
-            joint_data: Dictionary with joint angles and velocities
-            pelvis_orientation: Pelvis orientation angle
-            pelvis_velocity: Pelvis velocity
+            hip_angle_raw: Raw hip angle (degrees)
+            knee_angle_raw: Raw knee angle (degrees)
             
         Returns:
-            Dictionary with ankle position, velocity, and orientation
+            tuple: (processed_hip_angle, processed_knee_angle)
         """
-        try:
-            # Validate input data
-            if joint_data is None:
-                print("✗ Error: joint_data is None")
-                return None
-            
-            required_keys = ['hip_angle', 'knee_angle', 'hip_velocity', 'knee_velocity', 'time']
-            for key in required_keys:
-                if key not in joint_data:
-                    print(f"✗ Error: Missing key '{key}' in joint_data")
-                    return None
-                if joint_data[key] is None or np.isnan(joint_data[key]):
-                    print(f"✗ Error: Invalid value for '{key}': {joint_data[key]}")
-                    return None
-            
-            # Calculate ankle position using forward kinematics
-            ankle_pos = self.fk.calculate_ankle_position(
-                joint_data['hip_angle'], 
-                joint_data['knee_angle'], 
-                pelvis_orientation
-            )
-            
-            # Calculate ankle velocity using forward kinematics
-            ankle_vel = self.fk.calculate_ankle_velocity(
-                joint_data['hip_angle'], 
-                joint_data['knee_angle'],
-                joint_data['hip_velocity'], 
-                joint_data['knee_velocity'],
-                pelvis_orientation, 
-                pelvis_velocity
-            )
-            
-            # Calculate ankle orientation using your specified formula
-            ankle_orientation = self.fk.calculate_ankle_orientation(
-                joint_data['hip_angle'], 
-                joint_data['knee_angle'], 
-                pelvis_orientation
-            )
-            
-            # Validate outputs
-            if ankle_pos is None or ankle_vel is None or ankle_orientation is None:
-                print("✗ Error: Forward kinematics returned None values")
-                return None
-            
-            if np.any(np.isnan(ankle_pos)) or np.any(np.isnan(ankle_vel)) or np.isnan(ankle_orientation):
-                print("✗ Error: Forward kinematics returned NaN values")
-                print(f"   ankle_pos: {ankle_pos}")
-                print(f"   ankle_vel: {ankle_vel}")
-                print(f"   ankle_orientation: {ankle_orientation}")
-                return None
-            
-            return {
-                'position': ankle_pos,
-                'velocity': ankle_vel,
-                'orientation': ankle_orientation,
-                'time': joint_data['time']
-            }
-            
-        except Exception as e:
-            print(f"✗ Error in process_joint_data: {e}")
-            print(f"   joint_data: {joint_data}")
-            import traceback
-            traceback.print_exc()
-            return None
+        # Process hip position: subtract 90 degrees  
+        hip_angle = hip_angle_raw - 90
+        
+        # Process knee position: invert signal
+        knee_angle = -knee_angle_raw
+        
+        return hip_angle, knee_angle
     
-    def create_tpgmm_input(self, ankle_data):
+    def calculate_ankle_trajectory_frames(self, hip_angle, knee_angle, pelvis_angle=0):
         """
-        Create TP-GMM input from ankle data
+        Calculate ankle position in both reference frames
         
         Args:
-            ankle_data: Ankle position, velocity, orientation data
+            hip_angle: Hip angle (degrees, processed)
+            knee_angle: Knee angle (degrees, processed)
+            pelvis_angle: Pelvis orientation (degrees)
             
         Returns:
-            TP-GMM input array [10D] = [Frame1_data | Frame2_data]
+            dict: ankle positions in both frames
         """
-        # Frame 1: Reference frame (absolute coordinates)
-        frame1_pos = ankle_data['position']
-        frame1_vel = ankle_data['velocity'] 
-        frame1_orient = ankle_data['orientation']
+        # Calculate forward kinematics
+        fk_result = self.fk.calculate_forward_kinematics(hip_angle, knee_angle, pelvis_angle)
+        ankle_pos_global = fk_result['ankle_pos']
+        foot_orientation = fk_result['foot_orientation']
         
-        # Frame 2: Relative to target frame
-        frame2_pos = ankle_data['position'] - self.target_frame_origin
-        frame2_vel = ankle_data['velocity']  # Velocity should be the same in both frames
-        frame2_orient = ankle_data['orientation']
+        # Frame 1: Euler coordinates with origin at heel strike (final point)
+        # For now, we'll use the current position as Frame 1
+        # In a complete implementation, you'd need the heel strike reference
+        frame1_pos = ankle_pos_global.copy()
+        frame1_orientation = foot_orientation
         
-        # Create TP-GMM input: [x1, y1, vx1, vy1, o1, x2, y2, vx2, vy2, o2]
-        tpgmm_input = np.concatenate([
-            frame1_pos,      # [x1, y1]
-            frame1_vel,      # [vx1, vy1]
-            [frame1_orient], # [o1]
-            frame2_pos,      # [x2, y2]
-            frame2_vel,      # [vx2, vy2]
-            [frame2_orient]  # [o2]
-        ])
-        
-        return tpgmm_input
-    
-    def predict_next_state(self, current_ankle_data, time_step=0.1):
-        """
-        Predict next ankle state using TP-GMM
-        
-        Args:
-            current_ankle_data: Current ankle position, velocity, orientation
-            time_step: Time step for prediction
-            
-        Returns:
-            Predicted ankle state
-        """
-        # Create TP-GMM input
-        tpgmm_input = self.create_tpgmm_input(current_ankle_data)
-        
-        # Predict using GMR (simplified version)
-        predicted_velocity = self._gmr_predict(tpgmm_input)
-        
-        # Apply smoothing
-        if len(self.velocity_history) > 0:
-            alpha = self.smoothing_factor
-            prev_vel = self.velocity_history[-1]
-            predicted_velocity = alpha * predicted_velocity + (1 - alpha) * prev_vel
-        
-        # Limit velocity
-        velocity_norm = np.linalg.norm(predicted_velocity)
-        if velocity_norm > self.max_velocity:
-            predicted_velocity = (predicted_velocity / velocity_norm) * self.max_velocity
-        
-        # Update history
-        self.velocity_history.append(predicted_velocity.copy())
-        
-        # Predict next position
-        predicted_position = current_ankle_data['position'] + predicted_velocity * time_step
+        # Frame 2: Hip-centered coordinates  
+        # Transform to hip-centered frame
+        hip_pos = fk_result['hip_pos']
+        frame2_pos = ankle_pos_global - hip_pos  # Relative to hip
+        frame2_orientation = foot_orientation
         
         return {
-            'position': predicted_position,
-            'velocity': predicted_velocity,
-            'orientation': current_ankle_data['orientation']  # For simplicity
+            'frame1': {
+                'position': frame1_pos,
+                'orientation': frame1_orientation
+            },
+            'frame2': {
+                'position': frame2_pos,
+                'orientation': frame2_orientation
+            },
+            'global_ankle': ankle_pos_global,
+            'foot_orientation': foot_orientation
         }
     
-    def _gmr_predict(self, tpgmm_input):
+    def predict_from_current_state(self, hip_angle_raw, knee_angle_raw, pelvis_angle=0):
         """
-        Gaussian Mixture Regression for velocity prediction
+        Predict next state using TP-GMM
         
         Args:
-            tpgmm_input: Current state in TP-GMM format
+            hip_angle_raw: Raw hip angle (degrees)
+            knee_angle_raw: Raw knee angle (degrees)
+            pelvis_angle: Pelvis orientation (degrees)
             
         Returns:
-            Predicted velocity [vx, vy]
+            dict: prediction results
         """
-        # Use Frame 1 position to predict Frame 1 velocity
-        input_dims = [0, 1]      # Frame 1 position [x1, y1]
-        output_dims = [2, 3]     # Frame 1 velocity [vx1, vy1]
+        # Preprocess angles
+        hip_angle, knee_angle = self.preprocess_joint_angles(hip_angle_raw, knee_angle_raw)
         
-        input_data = tpgmm_input[input_dims]
+        # Calculate current state in both frames
+        current_frames = self.calculate_ankle_trajectory_frames(hip_angle, knee_angle, pelvis_angle)
         
-        # GMM parameters
+        # Create input vector for GMM (using Frame 2 data as primary input)
+        # Based on model structure: [x, y, vx, vy, orientation] for each frame
+        frame2_pos = current_frames['frame2']['position']
+        frame2_orient = np.radians(current_frames['frame2']['orientation'])
+        
+        # For velocity, use previous prediction if available, otherwise zero
+        if len(self.prediction_history) > 0:
+            prev_frame2_pos = self.prediction_history[-1]['frame2']['position']
+            frame2_vel = frame2_pos - prev_frame2_pos  # Simple velocity estimation
+        else:
+            frame2_vel = np.zeros(2)
+        
+        # Construct input for Frame 2: [x, y, vx, vy, orientation]
+        frame2_input = np.array([
+            frame2_pos[0], frame2_pos[1],
+            frame2_vel[0], frame2_vel[1],
+            frame2_orient
+        ])
+        
+        # For Frame 1, use similar approach
+        frame1_pos = current_frames['frame1']['position']
+        frame1_orient = np.radians(current_frames['frame1']['orientation'])
+        
+        if len(self.prediction_history) > 0:
+            prev_frame1_pos = self.prediction_history[-1]['frame1']['position']
+            frame1_vel = frame1_pos - prev_frame1_pos
+        else:
+            frame1_vel = np.zeros(2)
+            
+        frame1_input = np.array([
+            frame1_pos[0], frame1_pos[1],
+            frame1_vel[0], frame1_vel[1], 
+            frame1_orient
+        ])
+        
+        # Full input vector: [Frame1_data | Frame2_data] (10D)
+        full_input = np.concatenate([frame1_input, frame2_input])
+        
+        # Use GMM for prediction (without time dimension for now)
+        predicted_output = self._gmr_prediction(full_input)
+        
+        # Apply smoothing
+        if len(self.prediction_history) > 0:
+            alpha = self.smoothing_factor
+            prev_pred = self.prediction_history[-1]
+            
+            # Smooth Frame 1 prediction
+            predicted_output['frame1']['position'] = (
+                alpha * predicted_output['frame1']['position'] + 
+                (1 - alpha) * prev_pred['frame1']['position']
+            )
+            
+            # Smooth Frame 2 prediction
+            predicted_output['frame2']['position'] = (
+                alpha * predicted_output['frame2']['position'] + 
+                (1 - alpha) * prev_pred['frame2']['position']
+            )
+        
+        # Store in history
+        self.prediction_history.append(predicted_output)
+        
+        # Store diagnostics
+        self.diagnostics['inputs'].append(full_input)
+        self.diagnostics['predictions'].append(predicted_output)
+        
+        return {
+            'current_state': current_frames,
+            'prediction': predicted_output,
+            'input_vector': full_input
+        }
+    
+    def _gmr_prediction(self, input_vector):
+        """
+        Gaussian Mixture Regression for prediction
+        
+        Args:
+            input_vector: Current state vector (10D)
+            
+        Returns:
+            dict: predicted next state
+        """
+        # For simplicity, we'll predict the next position based on current state
+        # In a full implementation, you'd use proper GMR with conditional probabilities
+        
         n_components = self.gmm_model.n_components
         means = self.gmm_model.means_
         covariances = self.gmm_model.covariances_
         weights = self.gmm_model.weights_
         
-        # Calculate responsibilities
+        # Calculate responsibilities (simplified approach)
         responsibilities = np.zeros(n_components)
         
         for i in range(n_components):
-            # Extract mean and covariance for input dimensions
-            mean_input = means[i, input_dims]
-            cov_input = covariances[i][np.ix_(input_dims, input_dims)]
-            
             try:
-                # Add regularization
-                cov_input += np.eye(len(input_dims)) * 1e-6
+                # Use only position dimensions for responsibility calculation
+                pos_dims = [0, 1, 5, 6]  # x,y positions from both frames
+                mean_pos = means[i, 1:][pos_dims]  # Skip time dimension
+                input_pos = input_vector[pos_dims]
                 
-                # Calculate responsibility
-                diff = input_data - mean_input
-                inv_cov = np.linalg.inv(cov_input)
+                cov_pos = covariances[i][1:, 1:][np.ix_(pos_dims, pos_dims)]  # Skip time
+                cov_pos += np.eye(len(pos_dims)) * 1e-6
+                
+                diff = input_pos - mean_pos
+                inv_cov = np.linalg.inv(cov_pos)
                 mahalanobis = diff.T @ inv_cov @ diff
                 
-                # Probability
-                det_cov = np.linalg.det(cov_input)
+                det_cov = np.linalg.det(cov_pos)
                 if det_cov > 1e-10:
-                    prob = np.exp(-0.5 * mahalanobis) / np.sqrt((2 * np.pi)**len(input_dims) * det_cov)
+                    prob = np.exp(-0.5 * mahalanobis) / np.sqrt((2 * np.pi)**len(pos_dims) * det_cov)
                     responsibilities[i] = weights[i] * prob
-                else:
-                    responsibilities[i] = 0.0
                     
             except np.linalg.LinAlgError:
                 responsibilities[i] = 0.0
@@ -543,181 +316,391 @@ class TPGMMGaitPredictor:
         else:
             responsibilities = weights.copy()
         
-        # Predict output
-        predicted_output = np.zeros(len(output_dims))
+        # Predict next state (simplified - using weighted average of means)
+        predicted_state = np.zeros(10)  # 10D state vector
         
         for i in range(n_components):
             if responsibilities[i] > 1e-10:
-                mean_input = means[i, input_dims]
-                mean_output = means[i, output_dims]
-                
-                cov_input = covariances[i][np.ix_(input_dims, input_dims)]
-                cov_cross = covariances[i][np.ix_(input_dims, output_dims)]
-                
-                try:
-                    cov_input += np.eye(len(input_dims)) * 1e-6
-                    inv_cov_input = np.linalg.inv(cov_input)
-                    
-                    # Conditional output
-                    conditional_output = mean_output + cov_cross.T @ inv_cov_input @ (input_data - mean_input)
-                    predicted_output += responsibilities[i] * conditional_output
-                    
-                except np.linalg.LinAlgError:
-                    predicted_output += responsibilities[i] * mean_output
+                # Use mean of component (skip time dimension)
+                component_mean = means[i, 1:]  # Skip time dimension
+                predicted_state += responsibilities[i] * component_mean
         
-        return predicted_output
+        # Structure prediction result
+        prediction = {
+            'frame1': {
+                'position': predicted_state[0:2],
+                'velocity': predicted_state[2:4],
+                'orientation': predicted_state[4]
+            },
+            'frame2': {
+                'position': predicted_state[5:7],
+                'velocity': predicted_state[7:9],
+                'orientation': predicted_state[9]
+            }
+        }
+        
+        return prediction
 
-def wait_for_user_input():
-    """Wait for user input (space, n, or q) - Windows compatible"""
-    print("\nPress SPACE for next step, 'n' for next trial, 'q' to quit: ", end='', flush=True)
-    
-    try:
-        # Windows compatible input method
-        import msvcrt
+class GaitDataLoader:
+    """
+    Load and manage gait data from MAT file
+    """
+    def __init__(self, mat_file_path):
+        """
+        Initialize gait data loader
         
-        while True:
-            if msvcrt.kbhit():
-                key = msvcrt.getch().decode('utf-8').lower()
-                print(key)  # Echo the key pressed
-                
-                if key == ' ':  # Space
-                    return 'space'
-                elif key == 'n':
-                    return 'next_trial'
-                elif key == 'q':
-                    return 'quit'
-                elif key == '\r':  # Enter key
-                    return 'space'
-            time.sleep(0.1)
+        Args:
+            mat_file_path: Path to MAT file with gait data
+        """
+        self.mat_file_path = mat_file_path
+        self.current_trial = 0
+        self.current_step = 0
+        self.gait_data = None
+        self.load_data()
+        
+    def load_data(self):
+        """Load gait data from MAT file"""
+        try:
+            mat_data = scipy.io.loadmat(self.mat_file_path)
+            # Assuming the data structure is similar to demo_gait_data_angular_10_samples.mat
+            self.gait_data = mat_data['output_struct_array']
+            print(f"✓ Loaded gait data from: {self.mat_file_path}")
+            print(f"  Number of trials: {self.gait_data.shape[1]}")
+            return True
+        except Exception as e:
+            print(f"✗ Error loading gait data: {e}")
+            return False
+    
+    def get_current_angles(self):
+        """
+        Get current joint angles
+        
+        Returns:
+            dict: current angles or None if end of data
+        """
+        if self.gait_data is None:
+            return None
             
-    except ImportError:
-        # Fallback for non-Windows systems
-        print("\n(Press Enter after typing your choice)")
-        user_input = input().strip().lower()
+        if self.current_trial >= self.gait_data.shape[1]:
+            print("End of all trials")
+            return None
+            
+        # Get current trial data
+        trial = self.gait_data[0, self.current_trial]
+        hip_pos_raw = trial['hip_pos'][0, 0].flatten()
+        knee_pos_raw = trial['knee_pos'][0, 0].flatten()
         
-        if user_input == '' or user_input == ' ':  # Space or Enter
-            return 'space'
-        elif user_input == 'n':
-            return 'next_trial'
-        elif user_input == 'q':
-            return 'quit'
-        else:
-            return 'space'  # Default action
-
-def run_gait_simulation():
-    """Main simulation loop"""
+        if self.current_step >= len(hip_pos_raw):
+            print(f"End of trial {self.current_trial + 1}")
+            return None
+            
+        # Get current step data
+        hip_angle = hip_pos_raw[self.current_step]
+        knee_angle = knee_pos_raw[self.current_step]
+        
+        return {
+            'hip_angle': hip_angle,
+            'knee_angle': knee_angle,
+            'trial': self.current_trial,
+            'step': self.current_step,
+            'total_steps': len(hip_pos_raw)
+        }
     
-    # Parameters
+    def next_step(self):
+        """Move to next step"""
+        self.current_step += 1
+        
+    def next_trial(self):
+        """Move to next trial"""
+        self.current_trial += 1
+        self.current_step = 0
+    
+    def reset(self):
+        """Reset to beginning"""
+        self.current_trial = 0
+        self.current_step = 0
+
+class GaitVisualizer:
+    """
+    Real-time visualization of gait analysis
+    """
+    def __init__(self, predictor):
+        """
+        Initialize visualizer
+        
+        Args:
+            predictor: TP-GMM gait predictor
+        """
+        self.predictor = predictor
+        self.fig = None
+        self.axes = None
+        
+        # History for trajectory plotting
+        self.input_trajectory = []
+        self.predicted_trajectory_f1 = []
+        self.predicted_trajectory_f2 = []
+        
+        # Control state
+        self.paused = True
+        self.step_requested = False
+        self.next_trial_requested = False
+        self.reset_requested = False
+        self.quit_requested = False
+        
+        self.init_plot()
+        
+    def init_plot(self):
+        """Initialize matplotlib plots"""
+        self.fig, self.axes = plt.subplots(2, 2, figsize=(12, 10))
+        self.fig.suptitle('TP-GMM Gait Real-time Analysis\nPress SPACE: next step, N: next trial, R: reset, Q: quit', fontsize=14)
+        
+        # Configure subplots
+        self.axes[0, 0].set_title('Current Leg Configuration')
+        self.axes[0, 0].set_xlabel('X Position (m)')
+        self.axes[0, 0].set_ylabel('Y Position (m)')
+        self.axes[0, 0].grid(True)
+        self.axes[0, 0].set_aspect('equal')
+        
+        self.axes[0, 1].set_title('Ankle Trajectory - Input vs Prediction')
+        self.axes[0, 1].set_xlabel('X Position (m)')
+        self.axes[0, 1].set_ylabel('Y Position (m)')
+        self.axes[0, 1].grid(True)
+        self.axes[0, 1].set_aspect('equal')
+        
+        self.axes[1, 0].set_title('Frame 1 Trajectory')
+        self.axes[1, 0].set_xlabel('X Position (m)')
+        self.axes[1, 0].set_ylabel('Y Position (m)')
+        self.axes[1, 0].grid(True)
+        self.axes[1, 0].set_aspect('equal')
+        
+        self.axes[1, 1].set_title('Frame 2 Trajectory')
+        self.axes[1, 1].set_xlabel('X Position (m)')
+        self.axes[1, 1].set_ylabel('Y Position (m)')
+        self.axes[1, 1].grid(True)
+        self.axes[1, 1].set_aspect('equal')
+        
+        # Connect key press events
+        self.fig.canvas.mpl_connect('key_press_event', self.on_key_press)
+        
+        plt.tight_layout()
+        plt.ion()  # Interactive mode
+        plt.show()
+    
+    def on_key_press(self, event):
+        """Handle key press events"""
+        if event.key == ' ':  # Space bar
+            self.step_requested = True
+        elif event.key == 'n':
+            self.next_trial_requested = True
+        elif event.key == 'r':
+            self.reset_requested = True
+        elif event.key == 'q':
+            self.quit_requested = True
+        
+        print(f"Key pressed: {event.key}")
+    
+    def update_visualization(self, current_angles, prediction_result):
+        """
+        Update real-time visualization
+        
+        Args:
+            current_angles: Current joint angles
+            prediction_result: Prediction result from TP-GMM
+        """
+        # Clear previous plots
+        for ax in self.axes.flat:
+            ax.clear()
+        
+        # Re-configure subplots
+        self.init_plot_config()
+        
+        # Get data
+        current_state = prediction_result['current_state']
+        prediction = prediction_result['prediction']
+        
+        # Update trajectory histories
+        self.input_trajectory.append(current_state['global_ankle'])
+        self.predicted_trajectory_f1.append(prediction['frame1']['position'])
+        self.predicted_trajectory_f2.append(prediction['frame2']['position'])
+        
+        # Plot 1: Current leg configuration
+        self.plot_leg_configuration(current_angles, current_state)
+        
+        # Plot 2: Input vs predicted trajectory
+        self.plot_trajectory_comparison(current_state, prediction)
+        
+        # Plot 3: Frame 1 trajectory
+        self.plot_frame_trajectory(1, self.predicted_trajectory_f1)
+        
+        # Plot 4: Frame 2 trajectory
+        self.plot_frame_trajectory(2, self.predicted_trajectory_f2)
+        
+        # Update display
+        plt.draw()
+        plt.pause(0.01)
+    
+    def init_plot_config(self):
+        """Re-initialize plot configuration"""
+        titles = [
+            'Current Leg Configuration',
+            'Ankle Trajectory - Input vs Prediction', 
+            'Frame 1 Trajectory',
+            'Frame 2 Trajectory'
+        ]
+        
+        for i, ax in enumerate(self.axes.flat):
+            ax.set_title(titles[i])
+            ax.set_xlabel('X Position (m)')
+            ax.set_ylabel('Y Position (m)')
+            ax.grid(True)
+            ax.set_aspect('equal')
+    
+    def plot_leg_configuration(self, current_angles, current_state):
+        """Plot current leg configuration"""
+        ax = self.axes[0, 0]
+        
+        # Calculate leg segments
+        hip_angle, knee_angle = self.predictor.preprocess_joint_angles(
+            current_angles['hip_angle'], current_angles['knee_angle']
+        )
+        
+        fk_result = self.predictor.fk.calculate_forward_kinematics(hip_angle, knee_angle)
+        
+        # Plot leg segments
+        hip_pos = fk_result['hip_pos']
+        knee_pos = fk_result['knee_pos'] 
+        ankle_pos = fk_result['ankle_pos']
+        
+        # Femur (hip to knee)
+        ax.plot([hip_pos[0], knee_pos[0]], [hip_pos[1], knee_pos[1]], 
+                'b-', linewidth=4, label='Femur')
+        
+        # Tibia (knee to ankle)
+        ax.plot([knee_pos[0], ankle_pos[0]], [knee_pos[1], ankle_pos[1]], 
+                'r-', linewidth=4, label='Tibia')
+        
+        # Joints
+        ax.plot(hip_pos[0], hip_pos[1], 'ko', markersize=10, label='Hip')
+        ax.plot(knee_pos[0], knee_pos[1], 'go', markersize=8, label='Knee')
+        ax.plot(ankle_pos[0], ankle_pos[1], 'ro', markersize=6, label='Ankle')
+        
+        ax.legend()
+        ax.set_title(f'Leg Config - Hip: {current_angles["hip_angle"]:.1f}°, Knee: {current_angles["knee_angle"]:.1f}°')
+    
+    def plot_trajectory_comparison(self, current_state, prediction):
+        """Plot input vs predicted trajectory"""
+        ax = self.axes[0, 1]
+        
+        if len(self.input_trajectory) > 1:
+            # Plot input trajectory
+            input_traj = np.array(self.input_trajectory)
+            ax.plot(input_traj[:, 0], input_traj[:, 1], 'b-', linewidth=2, label='Input Trajectory')
+            ax.plot(input_traj[-1, 0], input_traj[-1, 1], 'bo', markersize=8, label='Current')
+        
+        # Plot predicted next point
+        pred_ankle = prediction['frame1']['position']  # Use frame 1 as main prediction
+        ax.plot(pred_ankle[0], pred_ankle[1], 'ro', markersize=8, label='Predicted Next')
+        
+        ax.legend()
+    
+    def plot_frame_trajectory(self, frame_num, trajectory_data):
+        """Plot trajectory for specific frame"""
+        if frame_num == 1:
+            ax = self.axes[1, 0]
+            color = 'blue'
+        else:
+            ax = self.axes[1, 1]
+            color = 'red'
+        
+        if len(trajectory_data) > 1:
+            traj = np.array(trajectory_data)
+            ax.plot(traj[:, 0], traj[:, 1], f'{color[0]}-', linewidth=2, alpha=0.7)
+            ax.plot(traj[-1, 0], traj[-1, 1], f'{color[0]}o', markersize=6)
+
+def main():
+    """
+    Main function for TP-GMM gait real-time analysis
+    """
+    print("=== TP-GMM Gait Real-time Analysis ===")
+    
+    # Paths
     model_path = 'tpgmm_gait_model.pkl'  # Your trained model
-    mat_file_path = 'demo_gait_data_angular_10_samples.mat'  # Your gait data
+    gait_data_path = 'demo_gait_data_angular_10_samples.mat'  # Your gait data
     
     try:
         # Initialize components
-        print("=== Initializing Gait TP-GMM Simulation ===")
-        simulator = GaitDataSimulator(mat_file_path)
+        print("Initializing TP-GMM predictor...")
         predictor = TPGMMGaitPredictor(model_path)
         
-        print("\\n=== Starting Simulation ===")
-        print("Commands:")
-        print("  SPACE/ENTER: Next data point")
-        print("  'n': Next trial")
-        print("  'q': Quit")
+        print("Loading gait data...")
+        data_loader = GaitDataLoader(gait_data_path)
         
-        # Simulation loop
-        step_count = 0
+        print("Initializing visualizer...")
+        visualizer = GaitVisualizer(predictor)
         
+        print("\n🚀 Real-time gait analysis started!")
+        print("📋 Controls (click on plot window first):")
+        print("  SPACE: Next step")
+        print("  N: Next trial") 
+        print("  R: Reset to beginning")
+        print("  Q: Quit")
+        print("\nClick on the plot window and press SPACE to begin...")
+        
+        # Main loop
         while True:
-            # Get current joint data
-            joint_data = simulator.get_current_joint_data()
+            # Check for user input through matplotlib events
+            plt.pause(0.1)  # Allow GUI to process events
             
-            if joint_data is None:
-                print("\\nEnd of trial. Press 'n' for next trial or 'q' to quit.")
-                user_input = wait_for_user_input()
-                
-                if user_input == 'next_trial':
-                    if simulator.next_trial():
-                        step_count = 0
-                        continue
-                    else:
-                        print("No more trials. Exiting.")
-                        break
-                elif user_input == 'quit':
-                    break
-                else:
-                    continue
-            
-            # Process joint data to ankle data
-            ankle_data = predictor.process_joint_data(joint_data)
-            
-            # Check if ankle_data is valid
-            if ankle_data is None:
-                print(f"✗ Failed to process joint data at step {step_count}")
-                print(f"   Joint data: {joint_data}")
-                
-                # Wait for user input to continue or quit
-                user_input = wait_for_user_input()
-                if user_input == 'quit':
-                    break
-                elif user_input == 'next_trial':
-                    if simulator.next_trial():
-                        step_count = 0
-                        continue
-                    else:
-                        print("No more trials. Exiting.")
-                        break
-                else:
-                    simulator.next_step()
-                    step_count += 1
-                    continue
-            
-            # Display current state
-            print(f"\n--- Step {step_count} (Trial {joint_data['trial']}, Point {joint_data['step']}) ---")
-            print(f"Joint angles (deg): Hip={np.rad2deg(joint_data['hip_angle']):.1f}°, Knee={np.rad2deg(joint_data['knee_angle']):.1f}°")
-            print(f"Joint angles (rad): Hip={joint_data['hip_angle']:.3f}, Knee={joint_data['knee_angle']:.3f}")
-            print(f"Ankle position: [{ankle_data['position'][0]:.3f}, {ankle_data['position'][1]:.3f}]")
-            print(f"Ankle velocity: [{ankle_data['velocity'][0]:.3f}, {ankle_data['velocity'][1]:.3f}]")
-            print(f"Ankle orientation: {ankle_data['orientation']:.3f} rad ({np.rad2deg(ankle_data['orientation']):.1f}°)")
-            
-            # Predict next state
-            predicted_state = predictor.predict_next_state(ankle_data)
-            print(f"Predicted velocity: [{predicted_state['velocity'][0]:.3f}, {predicted_state['velocity'][1]:.3f}]")
-            print(f"Predicted position: [{predicted_state['position'][0]:.3f}, {predicted_state['position'][1]:.3f}]")
-            
-            # Wait for user input
-            user_input = wait_for_user_input()
-            
-            if user_input == 'space':
-                simulator.next_step()
-                step_count += 1
-            elif user_input == 'next_trial':
-                if simulator.next_trial():
-                    step_count = 0
-                else:
-                    print("No more trials. Exiting.")
-                    break
-            elif user_input == 'quit':
+            if visualizer.quit_requested:
+                print("Quitting...")
                 break
+            
+            if visualizer.step_requested:
+                visualizer.step_requested = False
+                
+                # Get current angles
+                current_angles = data_loader.get_current_angles()
+                
+                if current_angles is None:
+                    print("No more data. Press 'N' for next trial or 'R' to reset.")
+                    continue
+                
+                print(f"\nTrial {current_angles['trial']+1}, Step {current_angles['step']+1}/{current_angles['total_steps']}")
+                print(f"Hip: {current_angles['hip_angle']:.1f}°, Knee: {current_angles['knee_angle']:.1f}°")
+                
+                # Predict using TP-GMM
+                prediction_result = predictor.predict_from_current_state(
+                    current_angles['hip_angle'],
+                    current_angles['knee_angle'],
+                    pelvis_angle=0  # Can be extended later
+                )
+                
+                # Update visualization
+                visualizer.update_visualization(current_angles, prediction_result)
+                
+                # Move to next step
+                data_loader.next_step()
+            
+            if visualizer.next_trial_requested:
+                visualizer.next_trial_requested = False
+                data_loader.next_trial()
+                print(f"Moved to trial {data_loader.current_trial + 1}")
+            
+            if visualizer.reset_requested:
+                visualizer.reset_requested = False
+                data_loader.reset()
+                visualizer.input_trajectory.clear()
+                visualizer.predicted_trajectory_f1.clear()
+                visualizer.predicted_trajectory_f2.clear()
+                print("Reset to beginning")
         
-        print("\\n✓ Simulation completed!")
+        plt.close('all')
+        print("✓ Program ended")
         
-    except FileNotFoundError as e:
-        print(f"✗ File not found: {e}")
-        print("Please check that your model and data files exist.")
     except Exception as e:
-        print(f"✗ Error during simulation: {e}")
+        print(f"✗ Error: {e}")
         import traceback
         traceback.print_exc()
-
-def main():
-    """Main function"""
-    print("=== TP-GMM Gait Real-time Simulation ===")
-    print("This program simulates real-time gait analysis using TP-GMM")
-    print("Make sure you have:")
-    print("  1. Trained TP-GMM model (tpgmm_gait_model.pkl)")
-    print("  2. Gait data file (demo_gait_data_angular_10_samples.mat)")
-    print()
-    
-    run_gait_simulation()
 
 if __name__ == "__main__":
     main()
