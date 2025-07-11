@@ -1,0 +1,26 @@
+=== TP-GMM Gait Model Information ===
+
+GMM Components: 18
+Total Dimension: 11
+Frames: 2
+Reference Frame (FR2): Global - ID 2
+Target Frame (FR1): Hip - ID 1
+
+Frame Descriptions:
+  FR1: Hip frame of reference (target)
+  FR2: Global frame of reference (reference)
+Data Structure (2D) - Both frames in hip coordinates:
+  Position dims - Hip frame (original): [1, 2]
+  Position dims - Hip frame (transformed): [6, 7]
+  Velocity dims - Hip frame (original): [3, 4]
+  Velocity dims - Hip frame (transformed): [8, 9]
+  Orientation dims - Hip frame (original): [5]
+  Orientation dims - Hip frame (transformed): [10]
+
+Metrics:
+  log_likelihood: 32.21
+  bic: -42162.83
+  aic: -48735.34
+
+Demonstrations: 4
+Total points: 800
