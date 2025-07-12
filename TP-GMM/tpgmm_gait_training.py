@@ -376,34 +376,38 @@ class TPGMMGaitTrainer:
         
         return result
     
-    def load_demonstrations_from_mat(self, mat_file_path: str) -> List[np.ndarray]:
+    def load_demonstrations_from_mat(self, mat_file_path: str) -> Tuple[List[np.ndarray], List[np.ndarray], List[np.ndarray]]:
         """Load and process demonstrations from MAT file"""
         print(f"Loading demonstrations from: {mat_file_path}")
         
         # Load gait data
-        trajectories_fr1, trajectories_fr2, time_data, frame_transforms = self.load_gait_data(mat_file_path)
+        raw_trajectories_fr1, raw_trajectories_fr2, time_data, frame_transforms = self.load_gait_data(mat_file_path)
         
-        if trajectories_fr1 is None:
+        if raw_trajectories_fr1 is None:
             print("Failed to load gait data")
-            return []
+            return [], [], []
         
         demonstrations = []
+        valid_raw_fr1 = []
+        valid_raw_fr2 = []
         
         # Process each trajectory
-        for i, (traj_fr1, traj_fr2, transform_data) in enumerate(zip(trajectories_fr1, trajectories_fr2, frame_transforms)):
-            print(f"Processing trajectory {i+1}/{len(trajectories_fr1)}")
+        for i, (traj_fr1, traj_fr2, transform_data) in enumerate(zip(raw_trajectories_fr1, raw_trajectories_fr2, frame_transforms)):
+            print(f"Processing trajectory {i+1}/{len(raw_trajectories_fr1)}")
             
             # Process trajectory for TP-GMM
             demo_array = self.process_gait_trajectory(traj_fr1, traj_fr2, transform_data)
             
             if demo_array is not None and len(demo_array) > 0:
                 demonstrations.append(demo_array)
+                valid_raw_fr1.append(traj_fr1)
+                valid_raw_fr2.append(traj_fr2)
                 print(f"✓ Trajectory {i+1} processed: {len(demo_array)} points")
             else:
                 print(f"✗ Trajectory {i+1} failed or empty")
         
         print(f"Successfully processed {len(demonstrations)} demonstrations")
-        return demonstrations
+        return demonstrations, valid_raw_fr1, valid_raw_fr2
     
     def add_time_dimension(self, demonstrations: List[np.ndarray]) -> List[np.ndarray]:
         """Add normalized time dimension to demonstrations"""
@@ -583,12 +587,12 @@ class TPGMMGaitTrainer:
                 f.write(f"  Frame 2 dimensions: {model_data['data_structure']['frame2_dims']}\n\n")
                 
                 f.write("Feature mapping:\n")
-                f.write(f"  Position (Frame 1): {model_data['data_structure']['position_dims']['frame1_hip']}\n")
-                f.write(f"  Position (Frame 2): {model_data['data_structure']['position_dims']['frame2_hip']}\n")
-                f.write(f"  Velocity (Frame 1): {model_data['data_structure']['velocity_dims']['frame1_hip']}\n")
-                f.write(f"  Velocity (Frame 2): {model_data['data_structure']['velocity_dims']['frame2_hip']}\n")
-                f.write(f"  Orientation (Frame 1): {model_data['data_structure']['orientation_dims']['frame1_hip']}\n")
-                f.write(f"  Orientation (Frame 2): {model_data['data_structure']['orientation_dims']['frame2_hip']}\n\n")
+                f.write(f"  Position (Frame 1): {model_data['data_structure']['position_dims']['frame1_true']}\n")
+                f.write(f"  Position (Frame 2): {model_data['data_structure']['position_dims']['frame2_true']}\n")
+                f.write(f"  Velocity (Frame 1): {model_data['data_structure']['velocity_dims']['frame1_true']}\n")
+                f.write(f"  Velocity (Frame 2): {model_data['data_structure']['velocity_dims']['frame2_true']}\n")
+                f.write(f"  Orientation (Frame 1): {model_data['data_structure']['orientation_dims']['frame1_true']}\n")
+                f.write(f"  Orientation (Frame 2): {model_data['data_structure']['orientation_dims']['frame2_true']}\n\n")
                 
                 f.write("=== Training Statistics ===\n")
                 f.write(f"Demonstrations: {len(model_data['individual_demos'])}\n")
@@ -750,8 +754,41 @@ class TPGMMGaitTrainer:
             
         except Exception as e:
             print(f"Error in 2D visualization: {e}")
-    
-    
+
+    def visualize_pre_fitting_trajectories(self, raw_fr1: np.ndarray, raw_fr2: np.ndarray, transformed_demo: np.ndarray, demo_idx: int):
+        """Visualize trajectories before and after transformation for a single demonstration."""
+        try:
+            fig, axes = plt.subplots(1, 2, figsize=(16, 7))
+            fig.suptitle(f'Demonstration {demo_idx + 1}: Trajectory Transformation', fontsize=16, fontweight='bold')
+
+            # Plot original trajectories
+            axes[0].plot(raw_fr1[:, 1], raw_fr1[:, 2], 'b-', alpha=0.7, linewidth=2, label='Original FR1')
+            axes[0].plot(raw_fr2[:, 1], raw_fr2[:, 2], 'r--', alpha=0.7, linewidth=2, label='Original FR2')
+            axes[0].set_title('Original Trajectories')
+            axes[0].set_xlabel('X Position')
+            axes[0].set_ylabel('Y Position')
+            axes[0].legend()
+            axes[0].grid(True, alpha=0.3)
+            axes[0].axis('equal')
+
+            # Plot transformed (coincident) trajectories
+            x1, y1 = transformed_demo[:, 0], transformed_demo[:, 1]
+            x2, y2 = transformed_demo[:, 5], transformed_demo[:, 6]
+            axes[1].plot(x1, y1, 'g-', alpha=0.8, linewidth=2, label='Transformed FR1 (True)')
+            axes[1].plot(x2, y2, 'm--', alpha=0.8, linewidth=2, label='Transformed FR2 (True)')
+            axes[1].set_title('Transformed (Coincident) Trajectories')
+            axes[1].set_xlabel('X Position (m)')
+            axes[1].set_ylabel('Y Position (m)')
+            axes[1].legend()
+            axes[1].grid(True, alpha=0.3)
+            axes[1].axis('equal')
+
+            plt.tight_layout(rect=[0, 0.03, 1, 0.95])
+            plt.savefig(f'pre_fitting_trajectory_demo_{demo_idx + 1}.png', dpi=300, bbox_inches='tight')
+            plt.show()
+
+        except Exception as e:
+            print(f"Error in pre-fitting visualization for demo {demo_idx + 1}: {e}")
 
 def main():
     """
@@ -761,7 +798,7 @@ def main():
     trainer = TPGMMGaitTrainer(reference_frame_id=2, target_frame_id=1)
     
     # Configuration
-    mat_file_path = 'new_processed_gait_data.mat'  # Replace with your file path
+    mat_file_path = 'new_processed_gait_data#07.mat'  # Replace with your file path
     model_save_path = 'tpgmm_gait_model_fixed.pkl'
     
     try:
@@ -772,13 +809,18 @@ def main():
         
         # 1. Load demonstrations
         print("\n=== Step 1: Loading Demonstrations ===")
-        demonstrations = trainer.load_demonstrations_from_mat(mat_file_path)
+        demonstrations, raw_trajectories_fr1, raw_trajectories_fr2 = trainer.load_demonstrations_from_mat(mat_file_path)
         
         if len(demonstrations) == 0:
             print("✗ No valid demonstrations found! Check your data file.")
             return
-        
+
         print(f"✓ Loaded {len(demonstrations)} valid demonstrations")
+
+        # Visualize pre-fitting trajectories for each demonstration
+        print("\n=== Visualizing Pre-Fitting Trajectories ===")
+        for i, (raw_fr1, raw_fr2, demo) in enumerate(zip(raw_trajectories_fr1, raw_trajectories_fr2, demonstrations)):
+            trainer.visualize_pre_fitting_trajectories(raw_fr1, raw_fr2, demo, i)
         
         # Quick statistics
         total_points = sum(len(demo) for demo in demonstrations)
