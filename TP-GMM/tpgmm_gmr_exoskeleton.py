@@ -572,10 +572,12 @@ class TPGMMGaussianMixtureRegression:
 def main():
     """Example usage of TP-GMM GMR for exoskeleton control"""
     
+    model_pat='models/tpgmm_gait_model_#39-47.pkl'
+    info_pat='models/tpgmm_gait_model_#39-47_info.txt'
     # Initialize GMR
     gmr = TPGMMGaussianMixtureRegression(
-        model_path='tpgmm_gait_model_#39.pkl',
-        info_path='tpgmm_gait_model_#07-10_info.txt'
+        model_pat,
+        info_pat
     )
     
     # Generate gait cycle
@@ -597,7 +599,7 @@ def main():
     print("\n=== Generating Plots ===")
     gmr.plot_predictions(gait_cycle['time_normalized'], 
                         show_variance=True,
-                        save_path='tpgmm_gmr_predictions.png')
+                        save_path='plots/tpgmm_gmr_predictions' + model_pat[24:-4] + '.png')
     
     # Real-time example
     print("\n=== Real-time Prediction Example ===")

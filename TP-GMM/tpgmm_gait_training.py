@@ -806,9 +806,9 @@ def main():
     trainer = TPGMMGaitTrainer(reference_frame_id=2, target_frame_id=1)
     
     # Configuration
-    mat_file_path = 'data/new_processed_gait_data#39_12.mat'  # Replace with your file path
-    model_save_path = 'models/tpgmm_gait_model_#39-12.pkl'
-    
+    mat_file_path = 'data/new_processed_gait_data#39_47.mat'  # Replace with your file path
+    model_save_path = 'models/tpgmm_gait_model_#39-47.pkl'
+
     try:
         print("=== TP-GMM Gait Training Pipeline ===")
         print(f"Data file: {mat_file_path}")

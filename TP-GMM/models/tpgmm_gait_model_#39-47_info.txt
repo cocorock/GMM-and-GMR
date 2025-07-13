@@ -2,10 +2,10 @@
 
 Model Type: Task-Parameterized Gaussian Mixture Model
 Application: Gait trajectory modeling
-Date Created: 2025-07-13T19:15:28
+Date Created: 2025-07-13T19:17:26
 
 === Model Configuration ===
-GMM Components: 17
+GMM Components: 19
 Total Dimension: 11
 Coordinate System: true_ankle_positions
 Transformation Applied: Both_FR1_and_FR2_to_true_positions
@@ -34,10 +34,10 @@ Feature mapping:
   Orientation (Frame 2): [10]
 
 === Training Statistics ===
-Demonstrations: 12
-Total data points: 2400
+Demonstrations: 47
+Total data points: 9400
 
 === Model Performance ===
-  log_likelihood: 34.319
-  bic: -154417.148
-  aic: -162079.920
+  log_likelihood: 32.779
+  bic: -602697.743
+  aic: -613284.620
