@@ -1,0 +1,8 @@
+GMM/gmm_gmr_analysis.py
+GMM/plot_kinematics.py
+TP-GMM/gait_analysis_python.py
+TP-GMM/gait_analysis.py
+TP-GMM/gait_kinematics.py
+TP-GMM/regenerate_figures.py
+TP-GMM/tpgmm_gait_training.py
+TP-GMM/tpgmm_gmr_exoskeleton.py

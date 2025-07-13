@@ -79,11 +79,13 @@ class TPGMMGaitTrainer:
                         ankle_pos_fr1 = self._extract_field(trial_data, 'ankle_pos_FR1')
                         ankle_vel_fr1 = self._extract_field(trial_data, 'ankle_pos_FR1_velocity')
                         ankle_orient_fr1 = self._extract_field(trial_data, 'ankle_orientation_FR1')
-                        
+                        print(f"----size of ankle_orient_fr1: {ankle_orient_fr1.shape}")
+
                         # Frame 2 data (Global frame of reference)
                         ankle_pos_fr2 = self._extract_field(trial_data, 'ankle_pos_FR2')
                         ankle_vel_fr2 = self._extract_field(trial_data, 'ankle_pos_FR2_velocity')
                         ankle_orient_fr2 = self._extract_field(trial_data, 'ankle_orientation_FR2')
+                        
                         
                         # Transformation matrices
                         ankle_A_fr1 = self._extract_field(trial_data, 'ankle_A_FR1')
@@ -105,7 +107,8 @@ class TPGMMGaitTrainer:
                         ankle_b_fr1 = trial_data[9].astype(np.float64)
                         ankle_A_fr2 = trial_data[10]
                         ankle_b_fr2 = trial_data[11]
-                    
+
+            
                     # Validate data shapes
                     if not self._validate_data_shapes(time, ankle_pos_fr1, ankle_pos_fr2, 
                                                     ankle_vel_fr1, ankle_vel_fr2, 
@@ -113,6 +116,11 @@ class TPGMMGaitTrainer:
                                                     ankle_A_fr1, ankle_b_fr1, 
                                                     ankle_A_fr2, ankle_b_fr2, i):
                         continue
+
+                    # Add noise to ankle_pos_fr2
+                    noise = np.random.uniform(-0.005, 0.005, size=ankle_pos_fr2.shape)
+                    ankle_pos_fr2 += noise
+                    print(f"Added noise to ankle_pos_FR2 for trial {i}")
                     
                     # Store transformation data
                     transform_data = {
@@ -386,7 +394,7 @@ class TPGMMGaitTrainer:
         if raw_trajectories_fr1 is None:
             print("Failed to load gait data")
             return [], [], []
-        
+    
         demonstrations = []
         valid_raw_fr1 = []
         valid_raw_fr2 = []
@@ -627,7 +635,7 @@ class TPGMMGaitTrainer:
     def visualize_training_data(self, model_data: Dict):
         """Visualize training data with enhanced plots"""
         try:
-            fig, axes = plt.subplots(2, 3, figsize=(18, 12))
+            fig, axes = plt.subplots(2, 3, figsize=(14, 10))
             fig.suptitle('TP-GMM Gait Training Data Analysis\n(Both frames as true ankle positions)', 
                         fontsize=16, fontweight='bold')
             
@@ -686,7 +694,7 @@ class TPGMMGaitTrainer:
             axes[1, 2].grid(True, alpha=0.3)
             
             plt.tight_layout()
-            plt.savefig('tpgmm_training_data_analysis.png', dpi=300, bbox_inches='tight')
+            plt.savefig('plots/tpgmm_training_data_analysis.png', dpi=300, bbox_inches='tight')
             plt.show()
             
         except Exception as e:
@@ -695,7 +703,7 @@ class TPGMMGaitTrainer:
     def visualize_2d_trajectories(self, model_data: Dict):
         """Visualize 2D trajectories for both frames"""
         try:
-            fig, axes = plt.subplots(1, 3, figsize=(18, 6))
+            fig, axes = plt.subplots(1, 3, figsize=(14, 6))
             fig.suptitle('2D Gait Trajectories (Both frames as true ankle positions)', 
                         fontsize=16, fontweight='bold')
             
@@ -749,7 +757,7 @@ class TPGMMGaitTrainer:
                         bbox=dict(boxstyle='round', facecolor='lightgreen' if rms_diff < 0.001 else 'lightyellow', alpha=0.8))
             
             plt.tight_layout()
-            plt.savefig('tpgmm_2d_trajectories.png', dpi=300, bbox_inches='tight')
+            plt.savefig('plots/tpgmm_2d_trajectories.png', dpi=300, bbox_inches='tight')
             plt.show()
             
         except Exception as e:
@@ -758,7 +766,7 @@ class TPGMMGaitTrainer:
     def visualize_pre_fitting_trajectories(self, raw_fr1: np.ndarray, raw_fr2: np.ndarray, transformed_demo: np.ndarray, demo_idx: int):
         """Visualize trajectories before and after transformation for a single demonstration."""
         try:
-            fig, axes = plt.subplots(1, 2, figsize=(16, 7))
+            fig, axes = plt.subplots(1, 2, figsize=(15, 7))
             fig.suptitle(f'Demonstration {demo_idx + 1}: Trajectory Transformation', fontsize=16, fontweight='bold')
 
             # Plot original trajectories
@@ -784,7 +792,7 @@ class TPGMMGaitTrainer:
             axes[1].axis('equal')
 
             plt.tight_layout(rect=[0, 0.03, 1, 0.95])
-            plt.savefig(f'pre_fitting_trajectory_demo_{demo_idx + 1}.png', dpi=300, bbox_inches='tight')
+            plt.savefig(f'plots/pre_fitting_trajectory_demo_{demo_idx + 1}.png', dpi=300, bbox_inches='tight')
             plt.show()
 
         except Exception as e:
@@ -798,8 +806,8 @@ def main():
     trainer = TPGMMGaitTrainer(reference_frame_id=2, target_frame_id=1)
     
     # Configuration
-    mat_file_path = 'new_processed_gait_data#07.mat'  # Replace with your file path
-    model_save_path = 'tpgmm_gait_model_fixed.pkl'
+    mat_file_path = 'data/new_processed_gait_data#39_12.mat'  # Replace with your file path
+    model_save_path = 'models/tpgmm_gait_model_#39-12.pkl'
     
     try:
         print("=== TP-GMM Gait Training Pipeline ===")
@@ -818,6 +826,7 @@ def main():
         print(f"✓ Loaded {len(demonstrations)} valid demonstrations")
 
         # Visualize pre-fitting trajectories for each demonstration
+        print("\n=== Visualizing Pre-Fitting Trajectories ===")
         print("\n=== Visualizing Pre-Fitting Trajectories ===")
         for i, (raw_fr1, raw_fr2, demo) in enumerate(zip(raw_trajectories_fr1, raw_trajectories_fr2, demonstrations)):
             trainer.visualize_pre_fitting_trajectories(raw_fr1, raw_fr2, demo, i)

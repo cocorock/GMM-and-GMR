@@ -421,7 +421,7 @@ def save_transformed_data(time, ankle_pos_FR1, ankle_pos_FR2, ankle_pos_FR1_tran
     savemat('transformed_gait_data.mat', data_dict)
     print("Transformed data saved to 'transformed_gait_data.mat'")
 
-def analyze_gait_data(filename='new_processed_gait_data.mat', cell_index=0):
+def analyze_gait_data(filename='new_processed_gait_data#07.mat', cell_index=0):
     """
     Main function to analyze gait data
     """

@@ -320,8 +320,8 @@ class TPGMMGaussianMixtureRegression:
         
         # Convert to joint angles and velocities (simplified 2-link model)
         # Assuming hip at origin, links pointing down when theta=0
-        L1 = 0.4  # Thigh length (m)
-        L2 = 0.4  # Shank length (m)
+        L1 = 0.39  # Thigh length (m)
+        L2 = 0.413  # Shank length (m)
         
         n_points = ankle_pos.shape[0]
         theta1 = np.zeros(n_points)     # Hip angle
@@ -574,8 +574,8 @@ def main():
     
     # Initialize GMR
     gmr = TPGMMGaussianMixtureRegression(
-        model_path='tpgmm_gait_model_fixed.pkl',
-        info_path='tpgmm_gait_model_fixed_info.txt'
+        model_path='tpgmm_gait_model_#39.pkl',
+        info_path='tpgmm_gait_model_#07-10_info.txt'
     )
     
     # Generate gait cycle
