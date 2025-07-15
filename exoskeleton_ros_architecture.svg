@@ -1,0 +1,152 @@
+<svg viewBox="0 0 1400 1000" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect width="1400" height="1000" fill="#f8f9fa"/>
+  
+  <!-- Title -->
+  <text x="700" y="40" text-anchor="middle" font-size="24" font-weight="bold" fill="#2c3e50">
+    Lower Limb Exoskeleton ROS Architecture
+  </text>
+  
+  <!-- Nodes -->
+  <!-- Supervisor Node -->
+  <rect x="550" y="80" width="300" height="80" rx="10" fill="#e74c3c" stroke="#c0392b" stroke-width="2"/>
+  <text x="700" y="115" text-anchor="middle" font-size="16" font-weight="bold" fill="white">Supervisor Node</text>
+  <text x="700" y="140" text-anchor="middle" font-size="12" fill="white">(Emergency Stop Monitor)</text>
+  
+  <!-- Crutches Node -->
+  <rect x="50" y="250" width="200" height="80" rx="10" fill="#3498db" stroke="#2980b9" stroke-width="2"/>
+  <text x="150" y="285" text-anchor="middle" font-size="16" font-weight="bold" fill="white">Crutches Node</text>
+  <text x="150" y="305" text-anchor="middle" font-size="12" fill="white">(Bluetooth Interface)</text>
+  
+  <!-- Depth Sensor Node -->
+  <rect x="300" y="250" width="200" height="80" rx="10" fill="#9b59b6" stroke="#8e44ad" stroke-width="2"/>
+  <text x="400" y="285" text-anchor="middle" font-size="16" font-weight="bold" fill="white">Depth Sensor Node</text>
+  <text x="400" y="305" text-anchor="middle" font-size="12" fill="white">(RealSense D435i)</text>
+  
+  <!-- FSM Node -->
+  <rect x="550" y="250" width="200" height="80" rx="10" fill="#e67e22" stroke="#d35400" stroke-width="2"/>
+  <text x="650" y="285" text-anchor="middle" font-size="16" font-weight="bold" fill="white">FSM Node</text>
+  <text x="650" y="305" text-anchor="middle" font-size="12" fill="white">(State Machine)</text>
+  
+  <!-- Gait Planner Node -->
+  <rect x="800" y="250" width="200" height="80" rx="10" fill="#27ae60" stroke="#229954" stroke-width="2"/>
+  <text x="900" y="285" text-anchor="middle" font-size="16" font-weight="bold" fill="white">Gait Planner</text>
+  <text x="900" y="305" text-anchor="middle" font-size="12" fill="white">(Step Decision)</text>
+  
+  <!-- Trajectory Generator Node -->
+  <rect x="300" y="450" width="250" height="80" rx="10" fill="#16a085" stroke="#138d75" stroke-width="2"/>
+  <text x="425" y="485" text-anchor="middle" font-size="16" font-weight="bold" fill="white">Trajectory Generator</text>
+  <text x="425" y="505" text-anchor="middle" font-size="12" fill="white">(GMM/GMR Dynamic System)</text>
+  
+  <!-- Motor Commands Node -->
+  <rect x="650" y="450" width="250" height="80" rx="10" fill="#34495e" stroke="#2c3e50" stroke-width="2"/>
+  <text x="775" y="485" text-anchor="middle" font-size="16" font-weight="bold" fill="white">Motor Commands Node</text>
+  <text x="775" y="505" text-anchor="middle" font-size="12" fill="white">(CAN Interface)</text>
+  
+  <!-- Hardware Interfaces -->
+  <rect x="50" y="650" width="180" height="60" rx="5" fill="#95a5a6" stroke="#7f8c8d" stroke-width="2"/>
+  <text x="140" y="685" text-anchor="middle" font-size="14" fill="white">Bluetooth Module</text>
+  
+  <rect x="300" y="650" width="180" height="60" rx="5" fill="#95a5a6" stroke="#7f8c8d" stroke-width="2"/>
+  <text x="390" y="685" text-anchor="middle" font-size="14" fill="white">RealSense D435i</text>
+  
+  <rect x="650" y="650" width="180" height="60" rx="5" fill="#95a5a6" stroke="#7f8c8d" stroke-width="2"/>
+  <text x="740" y="685" text-anchor="middle" font-size="14" fill="white">Motor Controllers</text>
+  
+  <!-- Topic Labels -->
+  <rect x="1050" y="100" width="300" height="800" rx="10" fill="#ecf0f1" stroke="#bdc3c7" stroke-width="2"/>
+  <text x="1200" y="130" text-anchor="middle" font-size="18" font-weight="bold" fill="#2c3e50">Topics & Services</text>
+  
+  <!-- Topics List -->
+  <text x="1070" y="170" font-size="14" font-weight="bold" fill="#e74c3c">Emergency Topics:</text>
+  <text x="1070" y="190" font-size="12" fill="#2c3e50">/emergency_stop</text>
+  
+  <text x="1070" y="220" font-size="14" font-weight="bold" fill="#3498db">Crutches Topics:</text>
+  <text x="1070" y="240" font-size="12" fill="#2c3e50">/crutches/orientation</text>
+  <text x="1070" y="255" font-size="12" fill="#2c3e50">/crutches/grf</text>
+  <text x="1070" y="270" font-size="12" fill="#2c3e50">/crutches/user_commands</text>
+  
+  <text x="1070" y="300" font-size="14" font-weight="bold" fill="#9b59b6">Sensor Topics:</text>
+  <text x="1070" y="320" font-size="12" fill="#2c3e50">/realsense/imu/orientation</text>
+  <text x="1070" y="335" font-size="12" fill="#2c3e50">/ground_plane</text>
+  
+  <text x="1070" y="365" font-size="14" font-weight="bold" fill="#e67e22">FSM Topics:</text>
+  <text x="1070" y="385" font-size="12" fill="#2c3e50">/fsm/state</text>
+  
+  <text x="1070" y="415" font-size="14" font-weight="bold" fill="#27ae60">Planner Topics:</text>
+  <text x="1070" y="435" font-size="12" fill="#2c3e50">/gait/next_step_target</text>
+  
+  <text x="1070" y="465" font-size="14" font-weight="bold" fill="#16a085">Trajectory Topics:</text>
+  <text x="1070" y="485" font-size="12" fill="#2c3e50">/trajectory/euler_coords</text>
+  
+  <text x="1070" y="515" font-size="14" font-weight="bold" fill="#34495e">Motor Topics:</text>
+  <text x="1070" y="535" font-size="12" fill="#2c3e50">/exoskeleton/state</text>
+  <text x="1070" y="550" font-size="12" fill="#2c3e50">/motor/commands</text>
+  
+  <text x="1070" y="590" font-size="14" font-weight="bold" fill="#2c3e50">Services:</text>
+  <text x="1070" y="610" font-size="12" fill="#2c3e50">/kinematics/forward</text>
+  <text x="1070" y="625" font-size="12" fill="#2c3e50">/kinematics/inverse</text>
+  <text x="1070" y="640" font-size="12" fill="#2c3e50">/torque/feedforward</text>
+  
+  <!-- Connections -->
+  <!-- Supervisor connections -->
+  <path d="M 700 160 L 700 200 L 650 200 L 650 250" stroke="#e74c3c" stroke-width="2" fill="none" marker-end="url(#arrowred)"/>
+  <path d="M 600 160 L 600 200 L 150 200 L 150 250" stroke="#3498db" stroke-width="2" fill="none" marker-end="url(#arrowblue)"/>
+  <path d="M 650 160 L 650 200 L 400 200 L 400 250" stroke="#9b59b6" stroke-width="2" fill="none" marker-end="url(#arrowpurple)"/>
+  <path d="M 750 160 L 750 200 L 775 200 L 775 450" stroke="#34495e" stroke-width="2" fill="none" marker-end="url(#arrowgray)"/>
+  
+  <!-- Crutches to FSM -->
+  <path d="M 250 290 L 550 290" stroke="#3498db" stroke-width="2" fill="none" marker-end="url(#arrowblue)"/>
+  
+  <!-- Depth Sensor to multiple -->
+  <path d="M 400 330 L 400 380 L 425 380 L 425 450" stroke="#9b59b6" stroke-width="2" fill="none" marker-end="url(#arrowpurple)"/>
+  <path d="M 450 330 L 450 380 L 900 380 L 900 330" stroke="#9b59b6" stroke-width="2" fill="none" marker-end="url(#arrowpurple)"/>
+  
+  <!-- FSM to Gait Planner -->
+  <path d="M 750 290 L 800 290" stroke="#e67e22" stroke-width="2" fill="none" marker-end="url(#arroworange)"/>
+  
+  <!-- Gait Planner to Trajectory -->
+  <path d="M 900 330 L 900 380 L 425 380 L 425 450" stroke="#27ae60" stroke-width="2" fill="none" marker-end="url(#arrowgreen)"/>
+  
+  <!-- Trajectory to Motor Commands -->
+  <path d="M 550 490 L 650 490" stroke="#16a085" stroke-width="2" fill="none" marker-end="url(#arrowteal)"/>
+  
+  <!-- Motor Commands feedback -->
+  <path d="M 775 530 L 775 580 L 425 580 L 425 530" stroke="#34495e" stroke-width="2" fill="none" marker-end="url(#arrowgray)"/>
+  
+  <!-- Hardware connections -->
+  <path d="M 150 330 L 150 650" stroke="#7f8c8d" stroke-width="2" stroke-dasharray="5,5"/>
+  <path d="M 400 330 L 400 650" stroke="#7f8c8d" stroke-width="2" stroke-dasharray="5,5"/>
+  <path d="M 775 530 L 775 650" stroke="#7f8c8d" stroke-width="2" stroke-dasharray="5,5"/>
+  
+  <!-- Arrows -->
+  <defs>
+    <marker id="arrowred" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#e74c3c"/>
+    </marker>
+    <marker id="arrowblue" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#3498db"/>
+    </marker>
+    <marker id="arrowpurple" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#9b59b6"/>
+    </marker>
+    <marker id="arroworange" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#e67e22"/>
+    </marker>
+    <marker id="arrowgreen" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#27ae60"/>
+    </marker>
+    <marker id="arrowteal" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#16a085"/>
+    </marker>
+    <marker id="arrowgray" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#34495e"/>
+    </marker>
+  </defs>
+  
+  <!-- Frequency annotations -->
+  <text x="700" y="950" text-anchor="middle" font-size="12" fill="#7f8c8d">
+    Frequencies: Supervisor (100Hz), Crutches (50Hz), Depth Sensor (30Hz), FSM (100Hz), 
+    Gait Planner (50Hz), Trajectory Gen (100Hz), Motor Commands (200Hz)
+  </text>
+</svg>
