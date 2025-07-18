@@ -374,7 +374,6 @@ class GaitDataProcessor:
         plt.tight_layout()
         plt.show()
 
-    
     def _get_demo_statistics(self, demo):
         """Generate statistics text for a demonstration"""
         stats = []

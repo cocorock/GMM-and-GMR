@@ -87,12 +87,12 @@ class TPGMMGaitTrainer:
             # Extract FR1 data (robot leg frame)
             pos_fr1 = np.array(demo_data['ankle_pos_FR1'])  # [N x 2]
             vel_fr1 = np.array(demo_data['ankle_pos_FR1_velocity'])  # [N x 2]
-            orient_fr1 = np.array(demo_data['ankle_orientation_FR1']).flatten()  # [N x 1]
+            orient_fr1 = np.deg2rad(np.array(demo_data['ankle_orientation_FR1']).flatten())  # [N x 1]
             
             # Extract FR2 data (task frame)
             pos_fr2 = np.array(demo_data['ankle_pos_FR2'])  # [N x 2]
             vel_fr2 = np.array(demo_data['ankle_pos_FR2_velocity'])  # [N x 2]
-            orient_fr2 = np.array(demo_data['ankle_orientation_FR2']).flatten()  # [N x 1]
+            orient_fr2 = np.deg2rad(np.array(demo_data['ankle_orientation_FR2']).flatten())  # [N x 1]
             
             # Combine FR1 data: [pos_x, pos_y, vel_x, vel_y, orient]
             fr1_data = np.column_stack([

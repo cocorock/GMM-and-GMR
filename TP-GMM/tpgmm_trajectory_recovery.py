@@ -340,9 +340,10 @@ class TPGMMTrajectoryRecovery:
             # Generate samples
             for j in range(n_samples):
                 try:
-                    samples[j, i] = np.random.multivariate_normal(mean, cov_reg)
+                    samples[j, i] = np.random.multivariate_normal(mean, cov_reg)*0.5
                 except np.linalg.LinAlgError:
                     # Fallback to diagonal covariance
+                    print(f"Warning: Covariance matrix at point {i} is not positive definite. Using diagonal approximation.")
                     cov_diag = np.diag(np.diag(cov_reg))
                     samples[j, i] = np.random.multivariate_normal(mean, cov_diag)
         
@@ -521,7 +522,7 @@ class TPGMMTrajectoryRecovery:
         # Scenario 3: Rotated and translated target
         print("\n=== Scenario 3: Rotated + Translated Target ===")
         new_frame_params_2 = {
-            'translation': [0.8, -0.2],
+            'translation': [0.55, 0.35],
             'rotation': np.pi/4  # 45 degrees
         }
         adapted_traj_2, adapted_cov_2 = self.adapt_trajectory_to_new_frame(
@@ -531,7 +532,7 @@ class TPGMMTrajectoryRecovery:
         # Scenario 4: Scaled, rotated, and translated
         print("\n=== Scenario 4: Scaled + Rotated + Translated Target ===")
         new_frame_params_3 = {
-            'translation': [-0.3, 0.6],
+            'translation': [0.6, 0.4],
             'rotation': -np.pi/6,  # -30 degrees
             'scale': 1.5
         }
@@ -622,6 +623,147 @@ class TPGMMTrajectoryRecovery:
         plt.savefig('plots/multiple_adaptation_scenarios.png', dpi=300, bbox_inches='tight')
         plt.show()
 
+    def demonstrate_dynamic_adaptation(self, time_points: np.ndarray):
+        """
+        Demonstrate adaptation with time-varying frame parameters
+        
+        Args:
+            time_points: Array of time points
+            
+        Returns:
+            Dictionary with dynamic adaptation results
+        """
+        print("Demonstrating dynamic frame adaptation...")
+        
+        n_points = len(time_points)
+        dynamic_trajectory = np.zeros((n_points, 10))
+        
+        # Create time-varying frame parameters
+        for i, t in enumerate(time_points):
+            # Frame parameters that change over time
+            translation = [0.3 * np.sin(2 * np.pi * t), 0.2 * np.cos(2 * np.pi * t)]
+            rotation = 0.5 * np.sin(np.pi * t)  # Oscillating rotation
+            
+            new_frame_params = {
+                'translation': translation,
+                'rotation': rotation
+            }
+            
+            # Get adapted trajectory for this time point
+            single_point_time = np.array([t])
+            adapted_point, _ = self.adapt_trajectory_to_new_frame(
+                single_point_time, new_frame_params
+            )
+            
+            dynamic_trajectory[i] = adapted_point[0]
+        
+        # Visualize dynamic adaptation
+        self.visualize_dynamic_adaptation(time_points, dynamic_trajectory)
+        
+        return dynamic_trajectory
+
+    def visualize_dynamic_adaptation(self, time_points: np.ndarray, 
+                                dynamic_trajectory: np.ndarray):
+        """
+        Visualize dynamic adaptation results
+        """
+        fig, axes = plt.subplots(2, 3, figsize=(18, 10))
+        fig.suptitle('Dynamic Frame Adaptation', fontsize=16)
+        
+        # Extract FR1 and FR2 data
+        fr1_data = dynamic_trajectory[:, :5]
+        fr2_data = dynamic_trajectory[:, 5:]
+        
+        # Plot position trajectories
+        axes[0, 0].plot(fr1_data[:, 0], fr1_data[:, 1], 'b-', linewidth=3, label='FR1')
+        axes[0, 0].plot(fr2_data[:, 0], fr2_data[:, 1], 'r-', linewidth=3, label='FR2')
+        axes[0, 0].set_xlabel('Position X')
+        axes[0, 0].set_ylabel('Position Y')
+        axes[0, 0].set_title('Position Trajectories')
+        axes[0, 0].legend()
+        axes[0, 0].grid(True, alpha=0.3)
+        
+        # Plot velocity trajectories
+        axes[0, 1].plot(fr1_data[:, 2], fr1_data[:, 3], 'b-', linewidth=3, label='FR1')
+        axes[0, 1].plot(fr2_data[:, 2], fr2_data[:, 3], 'r-', linewidth=3, label='FR2')
+        axes[0, 1].set_xlabel('Velocity X')
+        axes[0, 1].set_ylabel('Velocity Y')
+        axes[0, 1].set_title('Velocity Trajectories')
+        axes[0, 1].legend()
+        axes[0, 1].grid(True, alpha=0.3)
+        
+        # Plot orientations over time
+        axes[0, 2].plot(time_points, fr1_data[:, 4], 'b-', linewidth=3, label='FR1')
+        axes[0, 2].plot(time_points, fr2_data[:, 4], 'r-', linewidth=3, label='FR2')
+        axes[0, 2].set_xlabel('Time')
+        axes[0, 2].set_ylabel('Orientation (rad)')
+        axes[0, 2].set_title('Orientation Evolution')
+        axes[0, 2].legend()
+        axes[0, 2].grid(True, alpha=0.3)
+        
+        # Plot frame parameters over time
+        frame_translations_x = [0.3 * np.sin(2 * np.pi * t) for t in time_points]
+        frame_translations_y = [0.2 * np.cos(2 * np.pi * t) for t in time_points]
+        frame_rotations = [0.5 * np.sin(np.pi * t) for t in time_points]
+        
+        axes[1, 0].plot(time_points, frame_translations_x, 'g-', linewidth=2, label='Translation X')
+        axes[1, 0].plot(time_points, frame_translations_y, 'm-', linewidth=2, label='Translation Y')
+        axes[1, 0].set_xlabel('Time')
+        axes[1, 0].set_ylabel('Translation')
+        axes[1, 0].set_title('Frame Translation Over Time')
+        axes[1, 0].legend()
+        axes[1, 0].grid(True, alpha=0.3)
+        
+        axes[1, 1].plot(time_points, frame_rotations, 'orange', linewidth=2)
+        axes[1, 1].set_xlabel('Time')
+        axes[1, 1].set_ylabel('Rotation (rad)')
+        axes[1, 1].set_title('Frame Rotation Over Time')
+        axes[1, 1].grid(True, alpha=0.3)
+        
+        # 3D trajectory visualization
+        from mpl_toolkits.mplot3d import Axes3D
+        ax3d = fig.add_subplot(2, 3, 6, projection='3d')
+        ax3d.plot(fr1_data[:, 0], fr1_data[:, 1], time_points, 'b-', linewidth=3, label='FR1')
+        ax3d.plot(fr2_data[:, 0], fr2_data[:, 1], time_points, 'r-', linewidth=3, label='FR2')
+        ax3d.set_xlabel('Position X')
+        ax3d.set_ylabel('Position Y')
+        ax3d.set_zlabel('Time')
+        ax3d.set_title('3D Trajectory Evolution')
+        ax3d.legend()
+        
+        plt.tight_layout()
+        plt.savefig('plots/dynamic_adaptation.png', dpi=300, bbox_inches='tight')
+        plt.show()
+
+    def print_adaptation_summary(self, results: Dict):
+        """
+        Print summary of adaptation results
+        """
+        print("📊 Adaptation Summary:")
+        print("-" * 50)
+        
+        for scenario_name, (trajectory, covariance) in results.items():
+            print(f"\n{scenario_name.upper().replace('_', ' ')}:")
+            
+            # Calculate trajectory statistics
+            fr1_pos_range = np.ptp(trajectory[:, :2], axis=0)  # Range for FR1 position
+            fr2_pos_range = np.ptp(trajectory[:, 5:7], axis=0)  # Range for FR2 position
+            
+            print(f"  FR1 Position Range: X={fr1_pos_range[0]:.3f}, Y={fr1_pos_range[1]:.3f}")
+            print(f"  FR2 Position Range: X={fr2_pos_range[0]:.3f}, Y={fr2_pos_range[1]:.3f}")
+            
+            # Calculate average uncertainty
+            avg_uncertainty = np.mean(np.sqrt(np.diag(covariance.mean(axis=0))))
+            print(f"  Average Uncertainty: {avg_uncertainty:.4f}")
+            
+            # Calculate smoothness (velocity changes)
+            if trajectory.shape[0] > 1:
+                fr1_vel_smoothness = np.mean(np.diff(trajectory[:, 2:4], axis=0)**2)
+                fr2_vel_smoothness = np.mean(np.diff(trajectory[:, 7:9], axis=0)**2)
+                print(f"  FR1 Velocity Smoothness: {fr1_vel_smoothness:.4f}")
+                print(f"  FR2 Velocity Smoothness: {fr2_vel_smoothness:.4f}")
+
+
 def main():
     """
     Main demonstration of TP-GMM trajectory recovery and adaptation
@@ -647,7 +789,7 @@ def main():
     print("\n=== Demonstrating Multiple Adaptation Scenarios ===")
     
     # Run multiple scenario demonstration
-    results = recovery_system.demonstrate_adaptation_scenarios(n_points=50)
+    results = recovery_system.demonstrate_adaptation_scenarios(n_points=200)
     
     print("\n=== Individual Scenario Analysis ===")
     
@@ -684,150 +826,7 @@ def main():
     print("\n✓ TP-GMM trajectory recovery demonstration complete!")
     print("Check the 'plots' folder for visualizations.")
 
-def demonstrate_dynamic_adaptation(self, time_points: np.ndarray):
-    """
-    Demonstrate adaptation with time-varying frame parameters
-    
-    Args:
-        time_points: Array of time points
-        
-    Returns:
-        Dictionary with dynamic adaptation results
-    """
-    print("Demonstrating dynamic frame adaptation...")
-    
-    n_points = len(time_points)
-    dynamic_trajectory = np.zeros((n_points, 10))
-    
-    # Create time-varying frame parameters
-    for i, t in enumerate(time_points):
-        # Frame parameters that change over time
-        translation = [0.3 * np.sin(2 * np.pi * t), 0.2 * np.cos(2 * np.pi * t)]
-        rotation = 0.5 * np.sin(np.pi * t)  # Oscillating rotation
-        
-        new_frame_params = {
-            'translation': translation,
-            'rotation': rotation
-        }
-        
-        # Get adapted trajectory for this time point
-        single_point_time = np.array([t])
-        adapted_point, _ = self.adapt_trajectory_to_new_frame(
-            single_point_time, new_frame_params
-        )
-        
-        dynamic_trajectory[i] = adapted_point[0]
-    
-    # Visualize dynamic adaptation
-    self.visualize_dynamic_adaptation(time_points, dynamic_trajectory)
-    
-    return dynamic_trajectory
 
-def visualize_dynamic_adaptation(self, time_points: np.ndarray, 
-                               dynamic_trajectory: np.ndarray):
-    """
-    Visualize dynamic adaptation results
-    """
-    fig, axes = plt.subplots(2, 3, figsize=(18, 10))
-    fig.suptitle('Dynamic Frame Adaptation', fontsize=16)
-    
-    # Extract FR1 and FR2 data
-    fr1_data = dynamic_trajectory[:, :5]
-    fr2_data = dynamic_trajectory[:, 5:]
-    
-    # Plot position trajectories
-    axes[0, 0].plot(fr1_data[:, 0], fr1_data[:, 1], 'b-', linewidth=3, label='FR1')
-    axes[0, 0].plot(fr2_data[:, 0], fr2_data[:, 1], 'r-', linewidth=3, label='FR2')
-    axes[0, 0].set_xlabel('Position X')
-    axes[0, 0].set_ylabel('Position Y')
-    axes[0, 0].set_title('Position Trajectories')
-    axes[0, 0].legend()
-    axes[0, 0].grid(True, alpha=0.3)
-    
-    # Plot velocity trajectories
-    axes[0, 1].plot(fr1_data[:, 2], fr1_data[:, 3], 'b-', linewidth=3, label='FR1')
-    axes[0, 1].plot(fr2_data[:, 2], fr2_data[:, 3], 'r-', linewidth=3, label='FR2')
-    axes[0, 1].set_xlabel('Velocity X')
-    axes[0, 1].set_ylabel('Velocity Y')
-    axes[0, 1].set_title('Velocity Trajectories')
-    axes[0, 1].legend()
-    axes[0, 1].grid(True, alpha=0.3)
-    
-    # Plot orientations over time
-    axes[0, 2].plot(time_points, fr1_data[:, 4], 'b-', linewidth=3, label='FR1')
-    axes[0, 2].plot(time_points, fr2_data[:, 4], 'r-', linewidth=3, label='FR2')
-    axes[0, 2].set_xlabel('Time')
-    axes[0, 2].set_ylabel('Orientation (rad)')
-    axes[0, 2].set_title('Orientation Evolution')
-    axes[0, 2].legend()
-    axes[0, 2].grid(True, alpha=0.3)
-    
-    # Plot frame parameters over time
-    frame_translations_x = [0.3 * np.sin(2 * np.pi * t) for t in time_points]
-    frame_translations_y = [0.2 * np.cos(2 * np.pi * t) for t in time_points]
-    frame_rotations = [0.5 * np.sin(np.pi * t) for t in time_points]
-    
-    axes[1, 0].plot(time_points, frame_translations_x, 'g-', linewidth=2, label='Translation X')
-    axes[1, 0].plot(time_points, frame_translations_y, 'm-', linewidth=2, label='Translation Y')
-    axes[1, 0].set_xlabel('Time')
-    axes[1, 0].set_ylabel('Translation')
-    axes[1, 0].set_title('Frame Translation Over Time')
-    axes[1, 0].legend()
-    axes[1, 0].grid(True, alpha=0.3)
-    
-    axes[1, 1].plot(time_points, frame_rotations, 'orange', linewidth=2)
-    axes[1, 1].set_xlabel('Time')
-    axes[1, 1].set_ylabel('Rotation (rad)')
-    axes[1, 1].set_title('Frame Rotation Over Time')
-    axes[1, 1].grid(True, alpha=0.3)
-    
-    # 3D trajectory visualization
-    from mpl_toolkits.mplot3d import Axes3D
-    ax3d = fig.add_subplot(2, 3, 6, projection='3d')
-    ax3d.plot(fr1_data[:, 0], fr1_data[:, 1], time_points, 'b-', linewidth=3, label='FR1')
-    ax3d.plot(fr2_data[:, 0], fr2_data[:, 1], time_points, 'r-', linewidth=3, label='FR2')
-    ax3d.set_xlabel('Position X')
-    ax3d.set_ylabel('Position Y')
-    ax3d.set_zlabel('Time')
-    ax3d.set_title('3D Trajectory Evolution')
-    ax3d.legend()
-    
-    plt.tight_layout()
-    plt.savefig('plots/dynamic_adaptation.png', dpi=300, bbox_inches='tight')
-    plt.show()
-
-def print_adaptation_summary(self, results: Dict):
-    """
-    Print summary of adaptation results
-    """
-    print("📊 Adaptation Summary:")
-    print("-" * 50)
-    
-    for scenario_name, (trajectory, covariance) in results.items():
-        print(f"\n{scenario_name.upper().replace('_', ' ')}:")
-        
-        # Calculate trajectory statistics
-        fr1_pos_range = np.ptp(trajectory[:, :2], axis=0)  # Range for FR1 position
-        fr2_pos_range = np.ptp(trajectory[:, 5:7], axis=0)  # Range for FR2 position
-        
-        print(f"  FR1 Position Range: X={fr1_pos_range[0]:.3f}, Y={fr1_pos_range[1]:.3f}")
-        print(f"  FR2 Position Range: X={fr2_pos_range[0]:.3f}, Y={fr2_pos_range[1]:.3f}")
-        
-        # Calculate average uncertainty
-        avg_uncertainty = np.mean(np.sqrt(np.diag(covariance.mean(axis=0))))
-        print(f"  Average Uncertainty: {avg_uncertainty:.4f}")
-        
-        # Calculate smoothness (velocity changes)
-        if trajectory.shape[0] > 1:
-            fr1_vel_smoothness = np.mean(np.diff(trajectory[:, 2:4], axis=0)**2)
-            fr2_vel_smoothness = np.mean(np.diff(trajectory[:, 7:9], axis=0)**2)
-            print(f"  FR1 Velocity Smoothness: {fr1_vel_smoothness:.4f}")
-            print(f"  FR2 Velocity Smoothness: {fr2_vel_smoothness:.4f}")
-
-# Add these methods to the TPGMMTrajectoryRecovery class
-TPGMMTrajectoryRecovery.demonstrate_dynamic_adaptation = demonstrate_dynamic_adaptation
-TPGMMTrajectoryRecovery.visualize_dynamic_adaptation = visualize_dynamic_adaptation
-TPGMMTrajectoryRecovery.print_adaptation_summary = print_adaptation_summary
 
 # Example usage for custom adaptation
 def example_custom_adaptation():
