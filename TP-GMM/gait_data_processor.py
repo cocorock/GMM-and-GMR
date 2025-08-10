@@ -550,7 +550,7 @@ class GaitDataProcessor:
 # Example usage
 def main():
     # Initialize the processor
-    fpath = 'data/new_processed_gait_data#39_16.mat'
+    fpath = 'data/new_processed_gait_data#35_1_p50.mat'
     if not Path(fpath).exists():
         print(f"File {fpath} does not exist. Please check the path.")
         return
