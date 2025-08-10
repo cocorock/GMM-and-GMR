@@ -233,7 +233,7 @@ def analyze_json_file(file_path: str) -> str:
 if __name__ == "__main__":
 
     
-    file_path = 'data/new_processed_gait_data#39_16.json'
+    file_path = 'data/new_processed_gait_data#39_1.json'
     if not Path(file_path).exists():
         print(f"File {file_path} does not exist. Please check the path.")
         sys.exit(1)
@@ -242,7 +242,7 @@ if __name__ == "__main__":
     print(result)
     
     # Optional: Save to file
-    output_file = f"{file_path}_structure.txt"
+    output_file = f"{file_path}_structure_1.txt"
     with open(output_file, 'w', encoding='utf-8') as f:
         f.write(result)
     print(f"\nStructure analysis saved to: {output_file}")

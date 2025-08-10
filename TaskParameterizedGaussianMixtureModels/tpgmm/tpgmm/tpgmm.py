@@ -71,7 +71,7 @@ class TPGMM(ClassificationModule):
     def __init__(
         self,
         n_components: int,
-        threshold: float = 1e-7,
+        threshold: float = 1e-3,
         max_iter: int = 100,
         min_iter: int = 5,
         weights_init: ndarray = None,
@@ -97,6 +97,7 @@ class TPGMM(ClassificationModule):
         self._min_iter = min_iter
         self._threshold = threshold
         self._reg_factor = reg_factor
+        self.gap = 1e-20
 
         self._verbose = verbose
 
@@ -207,7 +208,7 @@ class TPGMM(ClassificationModule):
         ).T  # shape: (n_components, num_points)
        
         denominator = np.sum(numerator, axis=0)  # shape: (num_points)
-        denominator += 1e-120  # to avoid division by zero
+        denominator += self.gap   # to avoid division by zero
   
         # print(f"numerator.shape: {numerator.shape}")
         # for i in range(17):
@@ -256,7 +257,7 @@ class TPGMM(ClassificationModule):
         h = np.tile(h[None, :, :, None], (num_frames, 1, 1, num_features))
 
         numerator = np.sum(h * X, axis=2)
-        denominator = np.sum(h, axis=2) + 1e-120  # to avoid division by zero
+        denominator = np.sum(h, axis=2) + self.gap   # to avoid division by zero
         self.means_ = numerator / denominator
 
     def _update_covariances_(self, X: ndarray, h: ndarray) -> None:
@@ -284,7 +285,7 @@ class TPGMM(ClassificationModule):
             # swap dimensions to: (num_features, num_features, num_points)
             mat_aggregation = mat_aggregation.transpose(1, 2, 0)
             # weighted sum and division by h. shape: (num_features, num_features)
-            cov[frame_idx, component_idx] = (mat_aggregation @ component_h) / (component_h.sum()+ 1e-120)
+            cov[frame_idx, component_idx] = (mat_aggregation @ component_h) / (component_h.sum()+ self.gap )
         
         # shape: (num_frames, num_num_features, num_features)
         self.covariances_ = cov
@@ -305,7 +306,7 @@ class TPGMM(ClassificationModule):
         # reshape to: (num_points, n_components)
         probabilities = probabilities.T
         weighted_sum = probabilities @ self.weights_  # shape (num_points)
-        weighted_sum = weighted_sum+1e-120  # shape (num_points)
+        weighted_sum = weighted_sum + self.gap   # shape (num_points)
 
         # print(f"weighted_sum: {weighted_sum}")
         return np.sum(np.log(weighted_sum)).item()
@@ -332,7 +333,7 @@ class TPGMM(ClassificationModule):
         if self._verbose:
             print("Started KMeans clustering")
         self.means_, self.covariances_ = self._k_means(X)
-        self._cov_reg_matrix = identity_like(self.covariances_) * 1e-15
+        self._cov_reg_matrix = identity_like(self.covariances_) * 1e-1
 
         if self._verbose:
             print("finished KMeans clustering")

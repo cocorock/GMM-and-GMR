@@ -129,7 +129,7 @@ class GaussianMixtureRegression(RegressionModel):
         print(f"fit Translation shape: {translation.shape}")  # Should be (num_frames, num_features)
         
         xi_hat, sigma_hat = self._equation_5(translation, rotation_matrix)
-        xi_hat, sigma_hat = self._equation_6(xi_hat, sigma_hat + identity_like(sigma_hat) * 1e-15)
+        xi_hat, sigma_hat = self._equation_6(xi_hat, sigma_hat + identity_like(sigma_hat) * 1e-4)
 
         # rearange into original feature order
         xi_hat = self._revoke_sort_by_input(

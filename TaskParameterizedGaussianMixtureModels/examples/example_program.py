@@ -13,6 +13,7 @@ from numpy import ndarray
 from enum import Enum
 from typing import Any, List, Literal, Union
 from scipy import interpolate
+import matplotlib.pyplot as plt
 
 # Add parent directory to path for imports
 sys.path.append("/".join(sys.path[0].split("/")[:-1]))
@@ -22,6 +23,10 @@ from tpgmm.utils.casting import ssv_to_ndarray
 from tpgmm.utils.plot.plot import plot_trajectories, plot_ellipsoids, scatter
 from tpgmm.tpgmm.tpgmm import TPGMM
 from tpgmm.gmr.gmr import GaussianMixtureRegression
+
+import os
+print("Current directory")
+print(os.getcwd())
 
 
 class DiffFilter:
@@ -180,7 +185,7 @@ class PreProcessor:
             raise ValueError("wrong input type. Supported is: ndarray")
 
 
-def load_trajectories(data_path_pattern: str = "data/7days1/processed_data/*/*.txt") -> List[ndarray]:
+def load_trajectories(data_path_pattern: str = "C:/Users/quepe/Documents/GitHub/GMM-and-GMR/TaskParameterizedGaussianMixtureModels/examples/data/7days1/processed_data/*/*.txt") -> List[ndarray]:
     """Load trajectories from text files."""
     trajectories = []
     for data_path in glob(data_path_pattern):
@@ -256,6 +261,12 @@ def main():
     capture_freq = 100
     pre_processor = PreProcessor(capture_freq, num_samples)
     pre_processed_data = pre_processor(trajectories)
+
+    print(f"trajectories.shape : {np.array(trajectories).shape}")
+    print(f"pre_processed_data.shape : {pre_processed_data.shape}")
+
+    plot_trajectories(trajectories=pre_processed_data[0, :, :, 0:3])
+    plot_trajectories(trajectories=pre_processed_data[1, :, :, 0:3])
     
     print(f"Pre-processed data shape: {pre_processed_data.shape}")
     
@@ -272,21 +283,31 @@ def main():
     
     # Plot GMM ellipsoids from different perspectives
     print("\nPlotting GMM ellipsoids...")
+        
+    # fig = plt.figure(figsize=(10, 8))
+    # ax = fig.add_subplot(111, projection='3d')
+
     frame_idx = 0
-    plot_ellipsoids(
+    returned_ax = plot_ellipsoids(
         title="GMM from start perspective", 
         means=tpgmm.means_[frame_idx, :, :3], 
         covs=tpgmm.covariances_[frame_idx, :, :3, :3], 
         legend=True
     )
+  
     
+    # fig = plt.figure(figsize=(10, 8))
+    # ax = fig.add_subplot(111, projection='3d')
+
     frame_idx = 1
-    plot_ellipsoids(
+    returned_ax = plot_ellipsoids(
         title="GMM from end perspective", 
         means=tpgmm.means_[frame_idx, :, :3], 
         covs=tpgmm.covariances_[frame_idx, :, :3, :3], 
         legend=True
     )
+
+    # plt.show()
     
     # Perform Gaussian Mixture Regression
     print("\nPerforming Gaussian Mixture Regression...")
@@ -316,6 +337,8 @@ def main():
         ax=ax, 
         alpha=0.3
     )
+    
+    plt.show()
     
     # Print distance metrics
     start_distance = np.linalg.norm(translation[0] - mu[0])

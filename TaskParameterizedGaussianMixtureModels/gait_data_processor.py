@@ -359,7 +359,7 @@ class GaitDataProcessor:
         plt.tight_layout()
         
         if save_plots:
-            plt.savefig(f'plots/gait_data_verification_demo_{demo_index}.png', dpi=300, bbox_inches='tight')
+            plt.savefig(f'figures/gait_data_verification_demo_{demo_index}.png', dpi=300, bbox_inches='tight')
             print(f"Plot saved as gait_data_verification_demo_{demo_index}.png")
         
         plt.show()
@@ -480,7 +480,7 @@ class GaitDataProcessor:
         plt.tight_layout()
         
         if save_plots:
-            plt.savefig('plots/gait_data_overview.png', dpi=300, bbox_inches='tight')
+            plt.savefig('figures/gait_data_overview.png', dpi=300, bbox_inches='tight')
             print("Overview plot saved as gait_data_overview.png")
         
         plt.show()
@@ -550,7 +550,7 @@ class GaitDataProcessor:
 # Example usage
 def main():
     # Initialize the processor
-    fpath = 'data/new_processed_gait_data#39_16.mat'
+    fpath = 'data/new_processed_gait_data#39_1.mat'
     if not Path(fpath).exists():
         print(f"File {fpath} does not exist. Please check the path.")
         return
